@@ -1,0 +1,39 @@
+<Window x:Class="framebase_app.PresetDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Presets" Height="380" Width="520" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Brush.SurfaceDark}" ResizeMode="NoResize" WindowStyle="None"
+        Icon="framebase_logo.ico">
+    <Border CornerRadius="12" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" Margin="8">
+        <Grid Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock x:Name="TitleText" Text="Presets" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}" />
+
+            <StackPanel Grid.Row="1" Margin="0,12,0,0">
+                <TextBlock Text="Ausgewähltes Preset" Foreground="{StaticResource Brush.TextMuted}"/>
+                <ComboBox x:Name="PresetCombo" Style="{StaticResource ModernComboBox}" Margin="0,6,0,0"/>
+
+                <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Status" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Border x:Name="StatusChip" Background="#243244" CornerRadius="12" Padding="8,4" >
+                                <TextBlock x:Name="StatusText" Text="-" Foreground="{StaticResource Brush.TextMuted}"/>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CheckBtn" Style="{StaticResource SecondaryButton}" Margin="0,0,8,0">Nur prüfen</Button>
+                <Button x:Name="ApplyBtn" Style="{StaticResource PrimaryButton}">Übernehmen</Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

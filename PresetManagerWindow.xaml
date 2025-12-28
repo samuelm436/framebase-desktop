@@ -1,0 +1,8 @@
+<Window x:Class="framebase_app.PresetManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Preset Manager" Height="520" Width="720" Background="{StaticResource Brush.SurfaceDark}">
+    <Grid>
+        <TextBlock Text="Preset Manager (placeholder)" Foreground="{StaticResource Brush.Text}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Grid>
+</Window>
