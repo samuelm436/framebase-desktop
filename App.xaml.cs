@@ -13,6 +13,9 @@ public partial class App : Application
     {
         try
         {
+            // Extract embedded PresentMon.exe if not present
+            ResourceExtractor.ExtractResource("PresentMon.exe", "PresentMon.exe");
+
             // Global exception handler
             this.DispatcherUnhandledException += (sender, args) =>
             {
