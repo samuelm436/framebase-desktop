@@ -17,8 +17,14 @@ namespace framebase_app
         {
             try
             {
+                // Check if setup flag exists
                 string flag = GetFlagPath();
-                return File.Exists(flag);
+                if (!File.Exists(flag)) return false;
+
+                // Check if device is paired (token exists)
+                if (!File.Exists("device_token.json")) return false;
+
+                return true;
             }
             catch
             {
