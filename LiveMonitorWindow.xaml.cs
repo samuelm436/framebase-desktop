@@ -525,7 +525,7 @@ namespace framebase_app
             
             if (logoNames.TryGetValue(game, out var logoFile))
             {
-                var exeDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+                var exeDir = AppContext.BaseDirectory;
                 if (!string.IsNullOrEmpty(exeDir))
                 {
                     return System.IO.Path.Combine(exeDir, "logos", logoFile);
