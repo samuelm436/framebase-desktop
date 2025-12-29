@@ -29,7 +29,7 @@ namespace FramebaseApp
 
                 using var client = new HttpClient();
                 var payload = JsonSerializer.Serialize(new { code, systemInfo });
-                var resp = await client.PostAsync("https://framebase-web.vercel.app/api/pair-device",
+                var resp = await client.PostAsync("https://framebase.gg/api/pair-device",
                     new StringContent(payload, Encoding.UTF8, "application/json"));
 
                 var body = await resp.Content.ReadAsStringAsync();
@@ -142,7 +142,7 @@ namespace FramebaseApp
                 client.DefaultRequestHeaders.Remove("Authorization");
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {DeviceToken}");
 
-                var response = await client.GetAsync("https://framebase-web.vercel.app/api/user-info");
+                var response = await client.GetAsync("https://framebase.gg/api/user-info");
                 var body = await response.Content.ReadAsStringAsync();
 
                 if (response.IsSuccessStatusCode)
@@ -210,7 +210,7 @@ namespace FramebaseApp
 
                 try
                 {
-                    var response = await client.PostAsync("https://framebase-web.vercel.app/api/unpair", null);
+                    var response = await client.PostAsync("https://framebase.gg/api/unpair", null);
                     // delete local token regardless of server result
                     DeviceToken = null;
                     ConnectedUserEmail = null;

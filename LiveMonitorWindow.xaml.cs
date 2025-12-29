@@ -756,7 +756,7 @@ namespace framebase_app
                 }
 
                 // Simple test: Try to load user-info (simple API call without preset validation)
-                var resp = await client.GetAsync("https://framebase-web.vercel.app/api/user-info");
+                var resp = await client.GetAsync("https://framebase.gg/api/user-info");
 
                 if (resp.IsSuccessStatusCode)
                 {

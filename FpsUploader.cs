@@ -138,7 +138,7 @@ namespace FramebaseApp
 
             try
             {
-                var response = await _http.PostAsync("https://framebase-web.vercel.app/api/fps", content);
+                var response = await _http.PostAsync("https://framebase.gg/api/fps", content);
                 
                 try
                 {

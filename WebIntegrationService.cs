@@ -11,7 +11,7 @@ namespace FramebaseApp
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
 
-        public WebIntegrationService(string baseUrl = "https://framebase-web.vercel.app")
+        public WebIntegrationService(string baseUrl = "https://framebase.gg")
         {
             _httpClient = new HttpClient();
             _baseUrl = baseUrl;

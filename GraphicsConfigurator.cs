@@ -562,7 +562,7 @@ namespace FramebaseApp
             {
                 try
                 {
-                    string baseUrl = "https://framebase-web.vercel.app/presets";
+                    string baseUrl = "https://framebase.gg/presets";
                     try
                     {
                         var hintPath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "presets_url.txt");
