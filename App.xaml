@@ -285,6 +285,9 @@
                 <Setter Property="Padding" Value="6,4"/>
                 <Setter Property="MinWidth" Value="180"/>
             </Style>
+
+            <!-- Scale transform for checkboxes -->
+            <ScaleTransform x:Key="Scale15" ScaleX="1.5" ScaleY="1.5"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -90,7 +90,7 @@ namespace FramebaseApp
                 return "Preset not found";
 
             // Read device token
-            string deviceToken = null;
+            string? deviceToken = null;
             try
             {
                 if (File.Exists("device_token.json"))

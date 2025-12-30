@@ -223,5 +223,10 @@ namespace FramebaseApp
         {
             Stop();
         }
+
+        public System.Collections.Generic.List<double> GetFrametimeHistory()
+        {
+            return _recorder.GetFrametimeHistory();
+        }
     }
 }

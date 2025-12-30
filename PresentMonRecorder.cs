@@ -49,6 +49,14 @@ namespace FramebaseApp
             lock (_lock) { _window.Clear(); }
         }
 
+        public List<double> GetFrametimeHistory()
+        {
+            lock (_lock)
+            {
+                return _window.Select(x => x.frametime).ToList();
+            }
+        }
+
         private void RunPresentMon(string processName)
         {
             try

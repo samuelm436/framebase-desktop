@@ -23,8 +23,13 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Header Actions: account icon only, aligned right -->
+                    <!-- Header Actions: overlay and account icons -->
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="20,0,0,0" HorizontalAlignment="Right">
+                        <Button x:Name="OpenOverlaySettingsButton" Style="{StaticResource HeaderIconButton}" ToolTip="Overlay Einstellungen" HorizontalAlignment="Right" Margin="0,0,8,0">
+                            <Border Background="#33FFFFFF" CornerRadius="8" Padding="10,8">
+                                <TextBlock Text="👁️" FontSize="16" Foreground="White"/>
+                            </Border>
+                        </Button>
                         <Button x:Name="OpenAccountButton" Style="{StaticResource HeaderIconButton}" ToolTip="Konto verwalten" HorizontalAlignment="Right">
                             <Border Background="#33FFFFFF" CornerRadius="8" Padding="10,8">
                                 <TextBlock Text="👤" FontSize="16" Foreground="White"/>
@@ -115,7 +120,7 @@
                         </StackPanel>
                     </Border>
                     
-                    <!-- Right: Current Game and Button -->
+                    <!-- Right: Current Game -->
                     <Border Grid.Column="2" Style="{StaticResource Card}">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -158,6 +163,62 @@
 
                 <!-- Bottom spacer removed -->
             </Grid>
+        </Grid>
+
+        <!-- Overlay Settings Modal -->
+        <Grid x:Name="OverlaySettingsOverlay" Visibility="Collapsed" Background="#80000000">
+            <Border Width="400" Height="450" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" CornerRadius="12" Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,16">
+                        <Button x:Name="CloseOverlaySettingsButton" DockPanel.Dock="Right" Content="✕" Style="{StaticResource CloseButton}" HorizontalAlignment="Right"/>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="👁️" FontSize="20" Margin="0,0,8,0"/>
+                            <TextBlock Text="Overlay Settings" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    
+                    <StackPanel Grid.Row="1">
+                        <TextBlock Text="Configure the in-game overlay" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,12"/>
+
+                        <!-- Master Toggle -->
+                        <DockPanel Margin="0,0,0,12">
+                            <TextBlock Text="Enable Overlay" VerticalAlignment="Center" Foreground="{StaticResource Brush.Text}" FontSize="14"/>
+                            <CheckBox x:Name="OverlayToggle" HorizontalAlignment="Right" VerticalAlignment="Center" LayoutTransform="{StaticResource Scale15}"/>
+                        </DockPanel>
+
+                        <!-- Edit Mode -->
+                        <Border Background="#1F2937" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <DockPanel>
+                                    <TextBlock Text="Edit Mode" VerticalAlignment="Center" Foreground="{StaticResource Brush.Text}" FontWeight="Medium"/>
+                                    <CheckBox x:Name="EditModeToggle" HorizontalAlignment="Right" VerticalAlignment="Center" LayoutTransform="{StaticResource Scale15}"/>
+                                </DockPanel>
+                                <TextBlock Text="Enable to move, resize, and see background." FontSize="11" Foreground="{StaticResource Brush.TextMuted}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Scaling -->
+                        <TextBlock Text="Size" Foreground="{StaticResource Brush.Text}" Margin="0,0,0,4"/>
+                        <DockPanel Margin="0,0,0,12">
+                            <TextBlock x:Name="ScaleValueText" Text="100%" Foreground="{StaticResource Brush.TextMuted}" Width="40" DockPanel.Dock="Right" TextAlignment="Right"/>
+                            <Slider x:Name="ScaleSlider" Minimum="0.5" Maximum="2.0" Value="1.0" TickFrequency="0.1" IsSnapToTickEnabled="True"/>
+                        </DockPanel>
+
+                        <!-- Visibility Toggles -->
+                        <TextBlock Text="Visible Elements" Foreground="{StaticResource Brush.Text}" Margin="0,0,0,4"/>
+                        <UniformGrid Columns="2">
+                            <CheckBox x:Name="ShowFpsCheck" Content="FPS &amp; Avg" IsChecked="True" Margin="0,0,0,8" Foreground="{StaticResource Brush.Text}"/>
+                            <CheckBox x:Name="ShowGraphCheck" Content="Frametime Graph" IsChecked="True" Margin="0,0,0,8" Foreground="{StaticResource Brush.Text}"/>
+                            <CheckBox x:Name="ShowHardwareCheck" Content="Hardware Stats" IsChecked="True" Margin="0,0,0,8" Foreground="{StaticResource Brush.Text}"/>
+                        </UniformGrid>
+
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Overlay: presets as in-window popup -->

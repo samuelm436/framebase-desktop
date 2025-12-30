@@ -40,11 +40,66 @@ namespace framebase_app
         private bool _isExiting = false;
         private bool _isResettingSetup = false;
 
+        // Overlay
+        private OverlayWindow? _overlay;
+        private HardwareMonitor _hardwareMonitor;
+
         // UI: session duration is driven by coordinator SessionCounterChanged
 
         public LiveMonitorWindow()
         {
             InitializeComponent();
+
+            // Initialize Hardware Monitor
+            _hardwareMonitor = new HardwareMonitor();
+
+            // Initialize Overlay
+            _overlay = new OverlayWindow();
+            
+            if (FindName("OverlayToggle") is CheckBox overlayToggle)
+            {
+                overlayToggle.Checked += (s, e) => UpdateOverlayVisibility();
+                overlayToggle.Unchecked += (s, e) => UpdateOverlayVisibility();
+            }
+
+            // Style combo removed
+
+            if (FindName("EditModeToggle") is CheckBox editModeToggle)
+            {
+                editModeToggle.Checked += (s, e) => _overlay.SetEditMode(true);
+                editModeToggle.Unchecked += (s, e) => _overlay.SetEditMode(false);
+            }
+
+            if (FindName("ScaleSlider") is Slider scaleSlider)
+            {
+                scaleSlider.ValueChanged += (s, e) => 
+                {
+                    _overlay.SetScale(e.NewValue);
+                    if (FindName("ScaleValueText") is TextBlock text)
+                        text.Text = $"{(int)(e.NewValue * 100)}%";
+                };
+            }
+
+            if (FindName("ShowFpsCheck") is CheckBox fpsCheck)
+            {
+                fpsCheck.Checked += (s, e) => _overlay.ToggleSection("FPS", true);
+                fpsCheck.Unchecked += (s, e) => _overlay.ToggleSection("FPS", false);
+            }
+
+            if (FindName("ShowGraphCheck") is CheckBox graphCheck)
+            {
+                graphCheck.Checked += (s, e) => _overlay.ToggleSection("Graph", true);
+                graphCheck.Unchecked += (s, e) => _overlay.ToggleSection("Graph", false);
+            }
+
+            if (FindName("ShowHardwareCheck") is CheckBox hwCheck)
+            {
+                hwCheck.Checked += (s, e) => _overlay.ToggleSection("Hardware", true);
+                hwCheck.Unchecked += (s, e) => _overlay.ToggleSection("Hardware", false);
+            }
+
+            // Close overlay when main window closes
+            this.Closed += (s, e) => _overlay.Close();
 
             // Initialize System Tray
             InitializeSystemTray();
@@ -56,10 +111,14 @@ namespace framebase_app
             // Try to find account-related controls if they exist
             if (FindName("OpenAccountButton") is Button openAccountBtn)
                 openAccountBtn.Click += (_, __) => ShowOverlay("account", true);
+            if (FindName("OpenOverlaySettingsButton") is Button openOverlayBtn)
+                openOverlayBtn.Click += (_, __) => ShowOverlay("overlay_settings", true);
             if (FindName("ClosePresetsOverlayButton") is Button closePresetsBtn)
                 closePresetsBtn.Click += (_, __) => ShowOverlay("presets", false);
             if (FindName("CloseAccountOverlayButton") is Button closeAccountBtn)
                 closeAccountBtn.Click += (_, __) => ShowOverlay("account", false);
+            if (FindName("CloseOverlaySettingsButton") is Button closeOverlayBtn)
+                closeOverlayBtn.Click += (_, __) => ShowOverlay("overlay_settings", false);
 
             if (FindName("PairButton") is Button pairBtn)
                 pairBtn.Click += async (_, __) => await PairButton_Click();
@@ -98,7 +157,25 @@ namespace framebase_app
                     FrametimeText.Text = Math.Round(frametime, 1).ToString();
                     Low1Text.Text = Math.Round(low1).ToString();
                     InactivityStatusText.Text = state;
+
+                    // Update Overlay
+                    if (_overlay != null && _overlay.IsVisible)
+                    {
+                        bool isActive = state == "Active";
+                        bool isSupported = !string.IsNullOrEmpty(_currentGame);
+                        
+                        _overlay.UpdateMetrics(fps, low1, fps, isActive, isSupported);
+                        
+                        var (cpu, ramLoad, ramUsed, ramTotal) = _hardwareMonitor.GetMetrics();
+                        _overlay.UpdateHardwareInfo(cpu, ramLoad, ramUsed, ramTotal);
+                        
+                        var history = _coordinator.GetFrametimeHistory();
+                        _overlay.UpdateFrametimeGraph(history);
+                    }
                     InactivityDot.Fill = state == "Active" ? (Brush)FindResource("Brush.SuccessText") : Brushes.Orange;
+                    
+                    // Check visibility periodically (e.g. if game starts/stops)
+                    UpdateOverlayVisibility();
                 });
             };
             _coordinator.SessionCounterChanged += seconds =>
@@ -157,10 +234,52 @@ namespace framebase_app
                     if (FindName("AccountOverlay") is Grid accountOverlay)
                         accountOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                     break;
+                case "overlay_settings":
+                    if (FindName("OverlaySettingsOverlay") is Grid overlaySettings)
+                        overlaySettings.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    
+                    // Auto-toggle edit mode: ON when opening settings, OFF when closing
+                    if (FindName("EditModeToggle") is CheckBox editMode)
+                    {
+                        editMode.IsChecked = show;
+                    }
+                    break;
             }
 
             BackgroundLayer.IsEnabled = !show;
             BackgroundLayer.Effect = show ? new BlurEffect { Radius = 8 } : null;
+            
+            UpdateOverlayVisibility();
+        }
+
+        private void UpdateOverlayVisibility()
+        {
+            if (_overlay == null) return;
+
+            bool isEnabled = false;
+            if (FindName("OverlayToggle") is CheckBox toggle)
+                isEnabled = toggle.IsChecked == true;
+
+            if (!isEnabled)
+            {
+                _overlay.Hide();
+                return;
+            }
+
+            bool isSettingsOpen = false;
+            if (FindName("OverlaySettingsOverlay") is Grid settings)
+                isSettingsOpen = settings.Visibility == Visibility.Visible;
+
+            bool isGameActive = !string.IsNullOrEmpty(_currentGame);
+
+            if (isSettingsOpen || isGameActive)
+            {
+                _overlay.Show();
+            }
+            else
+            {
+                _overlay.Hide();
+            }
         }
 
         private void BuildSystemSpecs()

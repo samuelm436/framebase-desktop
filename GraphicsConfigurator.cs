@@ -93,6 +93,14 @@ namespace FramebaseApp
         {
             var result = new PresetCheckResult();
             string gameKey = game.ToLower();
+            // Normalize to preset key names
+            string presetKey = gameKey switch
+            {
+                "counter-strike 2" => "cs2",
+                "cp2077" => "cp2077",
+                "cyberpunk 2077" => "cp2077",
+                _ => gameKey
+            };
             string configPath = string.Empty;
             string? riotUserSettingsPath = string.Empty;
             string? gameUserSettingsPath = string.Empty;
@@ -117,12 +125,12 @@ namespace FramebaseApp
             }
             else
             {
-                configPath = gameKey switch
+                configPath = presetKey switch
                 {
-                    "cs2" or "counter-strike 2" => GetCS2VideoConfigPath(),
+                    "cs2" => GetCS2VideoConfigPath(),
                     "fortnite" => GetFortniteConfigPath(),
                     "forza horizon 5" => GetForzaHorizon5ConfigPath(),
-                    "cp2077" or "cyberpunk 2077" => GetCp2077ConfigPath(),
+                    "cp2077" => GetCp2077ConfigPath(),
                     _ => string.Empty
                 };
                 result.ConfigPath = configPath;
@@ -138,7 +146,7 @@ namespace FramebaseApp
             }
 
             // Load local presets (from \\presets next to EXE)
-            var presetDict = await DownloadPresetConfigAsync(gameKey);
+            var presetDict = await DownloadPresetConfigAsync(presetKey);
             System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Presets loaded: {presetDict?.Count ?? 0} entries");
             if (presetDict != null && presetDict.Count > 0)
             {
@@ -445,22 +453,35 @@ namespace FramebaseApp
             else
             {
                 var lines = System.IO.File.ReadAllLines(configPath);
+                
+                // Helper: parse CS2 config into dictionary using strict regex
+                Dictionary<string, string>? cs2Dict = null;
+                if (presetKey == "cs2")
+                {
+                    cs2Dict = new Dictionary<string, string>(StringComparer.Ordinal);
+                    var rx = new System.Text.RegularExpressions.Regex(@"^\s*""(?<key>[^""]+)""\s*""(?<val>[^""]*)""", System.Text.RegularExpressions.RegexOptions.Compiled);
+                    foreach (var ln in lines)
+                    {
+                        var m = rx.Match(ln);
+                        if (m.Success)
+                        {
+                            var key = m.Groups["key"].Value;
+                            var val = m.Groups["val"].Value;
+                            cs2Dict[key] = val; // Always overwrite so last occurrence wins
+                        }
+                    }
+                }
+                
                 foreach (var preset in presetDict)
                 {
                     bool match = true;
                     foreach (var kv in preset.Value)
                     {
                         string? value = null;
-                        switch (gameKey)
+                        switch (presetKey)
                         {
                             case "cs2":
-                                var line = lines.FirstOrDefault(l => l.Contains(kv.Key));
-                                if (line != null)
-                                {
-                                    var parts = line.Split('"');
-                                    // Format: "key"		"value" -> parts[3] ist der Wert
-                                    value = parts.Length >= 4 ? parts[3] : null;
-                                }
+                                cs2Dict?.TryGetValue(kv.Key, out value);
                                 break;
                             case "fortnite":
                                 var fortniteLine = lines.FirstOrDefault(l => l.StartsWith(kv.Key + "="));
@@ -531,6 +552,7 @@ namespace FramebaseApp
         private static readonly Dictionary<string, string> PresetFileNames = new(StringComparer.OrdinalIgnoreCase)
         {
             ["cs2"] = "cs2_video_settings.json",
+            ["counter-strike 2"] = "cs2_video_settings.json",
             ["fortnite"] = "fortnite_video_settings.json",
             ["forza horizon 5"] = "forzahorizon5_video_settings.json",
             ["forzahorizon5"] = "forzahorizon5_video_settings.json",
@@ -698,17 +720,62 @@ namespace FramebaseApp
         {
             string loginVdf = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86), "Steam", "config", "loginusers.vdf");
             if (!System.IO.File.Exists(loginVdf)) return "*";
-            string text = System.IO.File.ReadAllText(loginVdf);
-            var match = System.Text.RegularExpressions.Regex.Match(text, @"""(\d{17})""");
-            if (match.Success)
+            
+            try 
             {
-                if (ulong.TryParse(match.Groups[1].Value, out ulong steamId64))
+                string[] lines = System.IO.File.ReadAllLines(loginVdf);
+                // Find the most recent user
+                // Format is usually:
+                // "users"
+                // {
+                //    "76561198321491254"
+                //    {
+                //        ...
+                //        "MostRecent" "1"
+                //    }
+                // }
+                
+                string currentSteamId64 = "";
+                string lastSeenId = "";
+                
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string line = lines[i].Trim();
+                    // Check for SteamID key
+                    var idMatch = System.Text.RegularExpressions.Regex.Match(line, @"^""(\d{17})""$");
+                    if (idMatch.Success)
+                    {
+                        lastSeenId = idMatch.Groups[1].Value;
+                    }
+                    
+                    // Check for MostRecent flag in the block
+                    if (line.Contains("\"MostRecent\"") && line.Contains("\"1\""))
+                    {
+                        if (!string.IsNullOrEmpty(lastSeenId))
+                        {
+                            currentSteamId64 = lastSeenId;
+                            break;
+                        }
+                    }
+                }
+                
+                // Fallback: if no "MostRecent" found, use the first ID found (or the one from simple regex)
+                if (string.IsNullOrEmpty(currentSteamId64))
+                {
+                     string text = System.IO.File.ReadAllText(loginVdf);
+                     var match = System.Text.RegularExpressions.Regex.Match(text, @"""(\d{17})""");
+                     if (match.Success) currentSteamId64 = match.Groups[1].Value;
+                }
+
+                if (!string.IsNullOrEmpty(currentSteamId64) && ulong.TryParse(currentSteamId64, out ulong steamId64))
                 {
                     ulong baseId = 76561197960265728;
                     ulong steamId3 = steamId64 - baseId;
                     return steamId3.ToString();
                 }
             }
+            catch { }
+            
             return "*";
         }
 
@@ -1109,18 +1176,35 @@ namespace FramebaseApp
                         return false;
 
                     var lines = System.IO.File.ReadAllLines(configPath);
+
+                    // Helper: parse CS2 config into a dictionary of exact key -> value using a strict regex
+                    Dictionary<string, string> ParseCs2()
+                    {
+                        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+                        var rx = new System.Text.RegularExpressions.Regex("^\\s*\"(?<key>[^\"]+)\"\\s*\"(?<val>[^\"]*)\"", System.Text.RegularExpressions.RegexOptions.Compiled);
+                        foreach (var ln in lines)
+                        {
+                            var m = rx.Match(ln);
+                            if (m.Success)
+                            {
+                                var key = m.Groups["key"].Value;
+                                var val = m.Groups["val"].Value;
+                                // Always overwrite so the last occurrence wins (matches CS2 behavior)
+                                dict[key] = val;
+                            }
+                        }
+                        return dict;
+                    }
+
+                    var cs2Dict = gameKey == "cs2" ? ParseCs2() : null;
+
                     foreach (var kv in preset)
                     {
                         string? value = null;
                         switch (gameKey)
                         {
                             case "cs2":
-                                var line = lines.FirstOrDefault(l => l.Contains(kv.Key));
-                                if (line != null)
-                                {
-                                    var parts = line.Split('"');
-                                    value = parts.Length >= 4 ? parts[3] : null;
-                                }
+                                cs2Dict?.TryGetValue(kv.Key, out value);
                                 break;
                             case "fortnite":
                                 var l2 = lines.FirstOrDefault(l => l.StartsWith(kv.Key + "="));
@@ -1167,7 +1251,9 @@ namespace FramebaseApp
                         // CS2 uses pairs like: "setting.defaultres" "1920"
                         string GetQuoted(string key)
                         {
-                            var line = lines.FirstOrDefault(l => l.Contains(key));
+                            // Search for quoted key to avoid substring matches
+                            var searchKey = $"\"{key}\"";
+                            var line = lines.FirstOrDefault(l => l.Contains(searchKey));
                             if (line == null) return string.Empty;
                             var parts = line.Split('"');
                             return parts.Length >= 4 ? parts[3] : string.Empty;
