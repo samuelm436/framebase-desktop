@@ -106,7 +106,7 @@ namespace FramebaseApp
             return _isActive ? "Active" : "Inactive";
         }
 
-        public void ConfigureEnvironment(string cpu, string gpu, string resolution)
+        public void ConfigureEnvironment(string cpu, string gpu, string resolution, string? setting = null)
         {
             // Store names, but we will also need IDs for upload
             if (!string.IsNullOrWhiteSpace(cpu))
@@ -120,6 +120,10 @@ namespace FramebaseApp
             if (!string.IsNullOrWhiteSpace(resolution))
             {
                 _resolution = resolution;
+            }
+            if (!string.IsNullOrWhiteSpace(setting))
+            {
+                _setting = setting;
             }
         }
 

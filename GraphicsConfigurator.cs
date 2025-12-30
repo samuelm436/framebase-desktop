@@ -119,7 +119,7 @@ namespace FramebaseApp
             {
                 configPath = gameKey switch
                 {
-                    "cs2" => GetCS2VideoConfigPath(),
+                    "cs2" or "counter-strike 2" => GetCS2VideoConfigPath(),
                     "fortnite" => GetFortniteConfigPath(),
                     "forza horizon 5" => GetForzaHorizon5ConfigPath(),
                     "cp2077" or "cyberpunk 2077" => GetCp2077ConfigPath(),

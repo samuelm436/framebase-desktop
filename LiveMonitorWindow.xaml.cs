@@ -20,12 +20,12 @@ namespace framebase_app
     {
         private readonly UploadCoordinator _coordinator;
         private string? _currentGame;
-        private readonly string[] _games = new[] { "CS2", "Fortnite", "Forza Horizon 5", "Valorant", "Cyberpunk 2077" };
+        private readonly string[] _games = new[] { "Counter-Strike 2", "Fortnite", "Forza Horizon 5", "Valorant", "Cyberpunk 2077" };
         private PairingService _pairingService = new();
 
         private readonly (string DisplayName, string ProcessName, string[] Aliases)[] _gameDefinitions =
         {
-            ("CS2", "cs2.exe", new[] { "cs2" }),
+            ("Counter-Strike 2", "cs2.exe", new[] { "cs2" }),
             ("Fortnite", "FortniteClient-Win64-Shipping.exe", new[] { "FortniteClient-Win64-Shipping" }),
             ("Forza Horizon 5", "ForzaHorizon5.exe", new[] { "ForzaHorizon5" }),
             ("Valorant", "VALORANT-Win64-Shipping.exe", new[] { "VALORANT-Win64-Shipping" }),
@@ -393,7 +393,7 @@ namespace framebase_app
 
                 bool ok = false;
                 string lower = game.ToLower();
-                if (lower == "cs2")
+                if (lower == "cs2" || lower == "counter-strike 2")
                 {
                     ok = await GraphicsConfigurator.UpdateCS2VideoConfigAsync(GraphicsConfigurator.GetCS2VideoConfigPath(), selected);
                 }
@@ -431,7 +431,7 @@ namespace framebase_app
             }
         }
 
-        private void SetCurrentGame(string? game)
+        private async void SetCurrentGame(string? game)
         {
             _currentGame = game;
             UpdateGameDisplay(game);
@@ -442,8 +442,22 @@ namespace framebase_app
             // Enable/disable Stop & Upload button based on game detection
             StopAndUploadButton.IsEnabled = !string.IsNullOrEmpty(game);
             
+            string setting = "Performance"; // Default
+            if (!string.IsNullOrEmpty(game))
+            {
+                 try 
+                 {
+                     var res = await GraphicsConfigurator.CheckPresetStatusAsync(game);
+                     if (res.PresetMatched && !string.IsNullOrEmpty(res.MatchedPresetName))
+                     {
+                         setting = res.MatchedPresetName;
+                     }
+                 }
+                 catch { }
+            }
+
             // Coordinator environment
-            try { _coordinator.ConfigureEnvironment(SystemInfoHelper.GetCpu() ?? "Unknown CPU", SystemInfoHelper.GetGpu() ?? "Unknown GPU", "1920x1080"); } catch { }
+            try { _coordinator.ConfigureEnvironment(SystemInfoHelper.GetCpu() ?? "Unknown CPU", SystemInfoHelper.GetGpu() ?? "Unknown GPU", "1920x1080", setting); } catch { }
         }
 
         private void UpdateGameDisplay(string? game)
