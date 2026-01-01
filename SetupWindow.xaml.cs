@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Input;
 using System.Threading.Tasks;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using FramebaseApp;
 
 namespace framebase_app
@@ -22,19 +23,23 @@ namespace framebase_app
         private readonly Dictionary<string, GraphicsConfigurator.PresetCheckResult> _presetStatusByGame = new(StringComparer.OrdinalIgnoreCase);
         private bool _isPaired = false;
         private bool _autostartEnabled = true; // Enabled by default
+        private string? _currentDeviceId;
+        private DispatcherTimer? _pairingPollTimer;
 
         public SetupWindow()
         {
             InitializeComponent();
-            PairBtn.Click += PairBtn_Click;
+            ConnectDeviceBtn.Click += ConnectDeviceBtn_Click;
             RefreshGamesButton.Click += RefreshGamesButton_Click;
             ContinueButton.Click += ContinueButton_Click;
             FinishSetupButton.Click += FinishSetup_Click;
-            PairingCodeBox.TextChanged += PairingCodeBox_TextChanged;
             
             // Load autostart status and update toggle accordingly
             _autostartEnabled = AutostartHelper.IsAutostartEnabled();
             UpdateToggleVisual();
+            
+            // Check if already paired
+            CheckIfAlreadyPaired();
             
             _ = Task.Run(async () => await DetectGameConfigs());
         }
@@ -42,22 +47,21 @@ namespace framebase_app
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             base.OnClosing(e);
+            _pairingPollTimer?.Stop();
         }
 
-        private void PairingCodeBox_TextChanged(object sender, TextChangedEventArgs e)
+        private async void CheckIfAlreadyPaired()
         {
-            // Clear error message when user types
-            if (!string.IsNullOrEmpty(PairingStatus.Text) && 
-                (PairingStatus.Text.Contains("Invalid code") || PairingStatus.Text.Contains("Error pairing")))
+            if (!string.IsNullOrEmpty(_pairing.DeviceToken))
             {
-                PairingStatus.Text = "";
-                try
+                _isPaired = true;
+                var (success, email, _) = await _pairing.GetConnectedUserInfoAsync();
+                if (success)
                 {
-                    PairingStatus.Foreground = (Brush)FindResource("Brush.TextMuted");
-                }
-                catch
-                {
-                    PairingStatus.Foreground = new SolidColorBrush(Colors.Gray);
+                    PairingInputPanel.Visibility = Visibility.Collapsed;
+                    PairingSuccessPanel.Visibility = Visibility.Visible;
+                    ConnectedEmailText.Text = $"Connected to: {email}";
+                    ContinueButton.IsEnabled = true;
                 }
             }
         }
@@ -302,42 +306,67 @@ namespace framebase_app
             }
         }
 
-        private async void PairBtn_Click(object sender, RoutedEventArgs e)
+        private async void ConnectDeviceBtn_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                PairBtn.IsEnabled = false;
-                var code = PairingCodeBox.Text?.Trim() ?? string.Empty;
-                PairingStatus.Text = "Pairing...";
+                ConnectDeviceBtn.IsEnabled = false;
+                _currentDeviceId = _pairing.GeneratePairingLink().Split("=")[1];
+                var link = _pairing.GeneratePairingLink();
                 
-                var result = await _pairing.PairDeviceAsync(code);
+                PairingStatus.Text = "⏳ Opening browser...";
                 
-                if (result.Contains("success", StringComparison.OrdinalIgnoreCase))
+                // Öffne Browser
+                try
                 {
-                    _isPaired = true;
-                    PairingInputPanel.Visibility = Visibility.Collapsed;
-                    PairingSuccessPanel.Visibility = Visibility.Visible;
-                    var email = result.Split('(').Length > 1 ? result.Split('(')[1].TrimEnd(')') : "your account";
-                    ConnectedEmailText.Text = $"Connected to: {email}";
-                    PairingStatus.Text = "";
-                    ContinueButton.IsEnabled = true;
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = link,
+                        UseShellExecute = true
+                    });
                 }
-                else
+                catch
                 {
-                    _isPaired = false;
-                    PairingStatus.Text = $"Invalid code: {result}";
-                    PairingStatus.Foreground = new SolidColorBrush(Colors.Red);
+                    PairingStatus.Text = $"⚠️ Could not open browser. Please visit: {link}";
+                    PairingStatus.Foreground = new SolidColorBrush(Colors.Orange);
+                    ConnectDeviceBtn.IsEnabled = true;
+                    return;
                 }
+                
+                PairingStatus.Text = "⏳ Waiting for you to sign in...";
+                
+                // Starte Polling-Timer
+                _pairingPollTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(2)
+                };
+                _pairingPollTimer.Tick += async (s, args) => await CheckPairingStatus();
+                _pairingPollTimer.Start();
             }
             catch (Exception ex)
             {
-                _isPaired = false;
-                PairingStatus.Text = $"Error pairing: {ex.Message}";
+                PairingStatus.Text = $"❌ Error: {ex.Message}";
                 PairingStatus.Foreground = new SolidColorBrush(Colors.Red);
+                ConnectDeviceBtn.IsEnabled = true;
             }
-            finally
+        }
+
+        private async Task CheckPairingStatus()
+        {
+            if (string.IsNullOrEmpty(_currentDeviceId)) return;
+            
+            var (success, message, email) = await _pairing.CheckPairingStatusAsync(_currentDeviceId);
+            
+            if (success)
             {
-                if (!_isPaired) { PairBtn.IsEnabled = true; }
+                _pairingPollTimer?.Stop();
+                _isPaired = true;
+                
+                PairingInputPanel.Visibility = Visibility.Collapsed;
+                PairingSuccessPanel.Visibility = Visibility.Visible;
+                ConnectedEmailText.Text = $"Connected to: {email}";
+                PairingStatus.Text = "";
+                ContinueButton.IsEnabled = true;
             }
         }
 

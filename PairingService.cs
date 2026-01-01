@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,8 +10,119 @@ namespace FramebaseApp
 {
     public class PairingService
     {
+        private const string TOKEN_FILE = "device_token.dat";
         public string? DeviceToken { get; private set; }
         public string? ConnectedUserEmail { get; private set; }
+
+        public PairingService()
+        {
+            LoadSecureToken();
+        }
+
+        public string GeneratePairingLink()
+        {
+            var deviceId = GenerateDeviceId();
+            return $"https://framebase.gg/pair-device?deviceId={Uri.EscapeDataString(deviceId)}";
+        }
+
+        public async Task<(bool Success, string Message, string? Email)> CheckPairingStatusAsync(string deviceId)
+        {
+            try
+            {
+                using var client = new HttpClient();
+                var response = await client.GetAsync($"https://framebase.gg/api/check-pairing?deviceId={Uri.EscapeDataString(deviceId)}");
+                var body = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(body);
+                        
+                        if (doc.RootElement.TryGetProperty("paired", out var paired) && paired.GetBoolean())
+                        {
+                            string? token = null;
+                            if (doc.RootElement.TryGetProperty("deviceToken", out var dt))
+                                token = dt.GetString();
+                            
+                            string? email = null;
+                            if (doc.RootElement.TryGetProperty("email", out var em))
+                                email = em.GetString();
+
+                            if (!string.IsNullOrEmpty(token))
+                            {
+                                DeviceToken = token;
+                                ConnectedUserEmail = email;
+                                SaveSecureToken(token);
+                                return (true, "Successfully paired!", email);
+                            }
+                        }
+                        
+                        return (false, "Pairing pending...", null);
+                    }
+                    catch (JsonException)
+                    {
+                        return (false, "Invalid server response", null);
+                    }
+                }
+                else
+                {
+                    return (false, $"Server error: {response.StatusCode}", null);
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error: {ex.Message}", null);
+            }
+        }
+
+        private string GenerateDeviceId()
+        {
+            var cpuId = SystemInfoHelper.GetCpuId() ?? "unknown";
+            var gpuId = SystemInfoHelper.GetGpuId() ?? "unknown";
+            var combined = $"{cpuId}_{gpuId}_{Environment.MachineName}";
+            
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
+            return Convert.ToBase64String(hash).Replace("+", "-").Replace("/", "_").Replace("=", "");
+        }
+
+        private void SaveSecureToken(string token)
+        {
+            try
+            {
+                var tokenBytes = Encoding.UTF8.GetBytes(token);
+                var encryptedBytes = ProtectedData.Protect(tokenBytes, null, DataProtectionScope.CurrentUser);
+                File.WriteAllBytes(TOKEN_FILE, encryptedBytes);
+                
+                if (File.Exists("device_token.json"))
+                    File.Delete("device_token.json");
+            }
+            catch { }
+        }
+
+        private void LoadSecureToken()
+        {
+            try
+            {
+                if (File.Exists(TOKEN_FILE))
+                {
+                    var encryptedBytes = File.ReadAllBytes(TOKEN_FILE);
+                    var decryptedBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+                    DeviceToken = Encoding.UTF8.GetString(decryptedBytes);
+                }
+                else if (File.Exists("device_token.json"))
+                {
+                    var content = File.ReadAllText("device_token.json").Trim();
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        DeviceToken = content;
+                        SaveSecureToken(content);
+                    }
+                }
+            }
+            catch { }
+        }
 
         public async Task<string> PairDeviceAsync(string code)
         {
@@ -51,8 +163,7 @@ namespace FramebaseApp
                         if (!string.IsNullOrEmpty(token))
                         {
                             DeviceToken = token;
-                            // write raw token
-                            File.WriteAllText("device_token.json", DeviceToken);
+                            SaveSecureToken(token);
                             return "Pairing successful!";
                         }
 
@@ -63,7 +174,7 @@ namespace FramebaseApp
                             if (!string.IsNullOrEmpty(token))
                             {
                                 DeviceToken = token;
-                                File.WriteAllText("device_token.json", DeviceToken);
+                                SaveSecureToken(token);
                                 return "Pairing successful!";
                             }
                         }
@@ -77,7 +188,7 @@ namespace FramebaseApp
                         if (cleaned.Success)
                         {
                             DeviceToken = cleaned.Value;
-                            File.WriteAllText("device_token.json", DeviceToken);
+                            SaveSecureToken(cleaned.Value);
                             return "Pairing successful (Fallback)";
                         }
                         return "Pairing failed: Invalid server response.";
@@ -94,45 +205,10 @@ namespace FramebaseApp
             }
         }
 
-        private void EnsureDeviceTokenLoaded()
-        {
-            if (!string.IsNullOrEmpty(DeviceToken)) return;
-            if (!File.Exists("device_token.json")) return;
-            try
-            {
-                var content = File.ReadAllText("device_token.json").Trim();
-                // If file contains JSON object with token property
-                if ((content.StartsWith("{") && content.EndsWith("}")))
-                {
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(content);
-                        if (doc.RootElement.TryGetProperty("deviceToken", out var dt) && dt.ValueKind == JsonValueKind.String)
-                        {
-                            DeviceToken = dt.GetString();
-                            return;
-                        }
-                        if (doc.RootElement.TryGetProperty("token", out var t) && t.ValueKind == JsonValueKind.String)
-                        {
-                            DeviceToken = t.GetString();
-                            return;
-                        }
-                    }
-                    catch { }
-                }
-
-                // otherwise assume file contains raw token
-                if (!string.IsNullOrEmpty(content)) DeviceToken = content;
-            }
-            catch { }
-        }
-
         public async Task<(bool Success, string Email, string Message)> GetConnectedUserInfoAsync()
         {
             try
             {
-                EnsureDeviceTokenLoaded();
-
                 if (string.IsNullOrEmpty(DeviceToken))
                 {
                     return (false, "", "Kein Device Token vorhanden");
@@ -196,11 +272,9 @@ namespace FramebaseApp
         {
             try
             {
-                EnsureDeviceTokenLoaded();
-
                 if (string.IsNullOrEmpty(DeviceToken))
                 {
-                    if (File.Exists("device_token.json")) File.Delete("device_token.json");
+                    DeleteAllTokenFiles();
                     return (true, "Local token file deleted (no active token found)");
                 }
 
@@ -211,10 +285,9 @@ namespace FramebaseApp
                 try
                 {
                     var response = await client.PostAsync("https://framebase.gg/api/unpair", null);
-                    // delete local token regardless of server result
                     DeviceToken = null;
                     ConnectedUserEmail = null;
-                    if (File.Exists("device_token.json")) File.Delete("device_token.json");
+                    DeleteAllTokenFiles();
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -229,7 +302,7 @@ namespace FramebaseApp
                 {
                     DeviceToken = null;
                     ConnectedUserEmail = null;
-                    if (File.Exists("device_token.json")) File.Delete("device_token.json");
+                    DeleteAllTokenFiles();
                     return (true, $"Local connection cleared (Network error: {ex.Message})");
                 }
             }
@@ -237,6 +310,16 @@ namespace FramebaseApp
             {
                 return (false, $"Error disconnecting: {ex.Message}");
             }
+        }
+
+        private void DeleteAllTokenFiles()
+        {
+            try
+            {
+                if (File.Exists(TOKEN_FILE)) File.Delete(TOKEN_FILE);
+                if (File.Exists("device_token.json")) File.Delete("device_token.json");
+            }
+            catch { }
         }
     }
 }
