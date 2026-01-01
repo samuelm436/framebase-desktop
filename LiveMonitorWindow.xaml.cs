@@ -208,6 +208,7 @@ namespace framebase_app
                             ? $"{Math.Round(avgFps, 1)} FPS | 1%: {Math.Round(low1, 1)}" 
                             : "Upload failed";
                         summary.Foreground = ok ? (Brush)FindResource("Brush.SuccessText") : Brushes.Red;
+                        summary.ToolTip = ok ? null : msg;
                     }
                 });
             };
