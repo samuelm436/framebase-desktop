@@ -97,8 +97,14 @@ namespace FramebaseApp
                         float vramUsedBytes = _gpuMemoryCounter.NextValue();
                         float vramUsedGB = vramUsedBytes / (1024f * 1024f * 1024f);
                         metrics.VramLoad = (vramUsedGB / _vramTotalGB) * 100f;
+                        
+                        // Debug output
+                        Console.WriteLine($"VRAM Used: {vramUsedGB:F2} GB / {_vramTotalGB:F2} GB = {metrics.VramLoad:F1}%");
                     }
-                    catch { }
+                    catch (Exception ex) 
+                    { 
+                        Console.WriteLine($"VRAM Read Error: {ex.Message}");
+                    }
                 }
 
                 _cachedMetrics = metrics;
