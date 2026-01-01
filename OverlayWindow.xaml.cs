@@ -60,22 +60,26 @@ namespace framebase_app
             }
         }
 
-        public void UpdateHardwareInfo(float cpuLoad, float ramLoad, float ramUsed, float ramTotal)
+        public void UpdateHardwareInfo(FramebaseApp.HardwareMonitor.HardwareMetrics metrics)
         {
-            // Column 1: Load/Usage %
-            // Column 2: Temp/Absolute Value
+            // Column 1: Load %
+            // Column 2: Temp °C or Absolute Value
             
-            CpuTemp.Text = $"{Math.Round(cpuLoad)}%"; // Using Temp block for Load temporarily to swap columns visually
-            CpuLoad.Text = "-"; // Temp placeholder
+            // CPU
+            CpuLoad.Text = metrics.CpuLoad >= 0 ? $"{Math.Round(metrics.CpuLoad)}%" : "-";
+            CpuTemp.Text = metrics.CpuTemp >= 0 ? $"{Math.Round(metrics.CpuTemp)}°C" : "-";
             
-            RamLoad.Text = $"{Math.Round(ramLoad)}%";
-            RamUsed.Text = $"{Math.Round(ramUsed, 1)} GB";
+            // GPU
+            GpuLoad.Text = metrics.GpuLoad >= 0 ? $"{Math.Round(metrics.GpuLoad)}%" : "-";
+            GpuTemp.Text = metrics.GpuTemp >= 0 ? $"{Math.Round(metrics.GpuTemp)}°C" : "-";
             
-            GpuTemp.Text = "-"; // Load placeholder
-            GpuLoad.Text = "-"; // Temp placeholder
-
-            VramLoad.Text = "-";
-            VramUsed.Text = "-";
+            // RAM
+            RamLoad.Text = metrics.RamLoad >= 0 ? $"{Math.Round(metrics.RamLoad)}%" : "-";
+            RamUsed.Text = metrics.RamUsed >= 0 ? $"{Math.Round(metrics.RamUsed, 1)} GB" : "-";
+            
+            // VRAM
+            VramLoad.Text = metrics.VramLoad >= 0 ? $"{Math.Round(metrics.VramLoad)}%" : "-";
+            VramUsed.Text = metrics.VramUsed >= 0 ? $"{Math.Round(metrics.VramUsed, 1)} GB" : "-";
         }
 
         public void UpdateFrametimeGraph(List<double> frametimes)

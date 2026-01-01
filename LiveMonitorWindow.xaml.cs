@@ -166,8 +166,8 @@ namespace framebase_app
                         
                         _overlay.UpdateMetrics(fps, low1, fps, isActive, isSupported);
                         
-                        var (cpu, ramLoad, ramUsed, ramTotal) = _hardwareMonitor.GetMetrics();
-                        _overlay.UpdateHardwareInfo(cpu, ramLoad, ramUsed, ramTotal);
+                        var metrics = _hardwareMonitor.GetMetrics();
+                        _overlay.UpdateHardwareInfo(metrics);
                         
                         var history = _coordinator.GetFrametimeHistory();
                         _overlay.UpdateFrametimeGraph(history);

@@ -39,23 +39,17 @@ namespace FramebaseApp
             _activity = new InputActivityMonitor();
             _uploader = new FpsUploader();
 
-            _recorder.OnFpsData += fps =>
+            _recorder.OnFpsData += (fps, liveLow1) =>
             {
                 _currentFps = fps;
                 _currentFrametime = fps > 0 ? 1000.0 / fps : 0;
                 
+                // Always use the live 1% low from recorder for the overlay
+                _current1PercentLow = liveLow1;
+                
                 if (_isRecording && _isActive)
                 {
                     _uploader.AddFps(fps);
-                    
-                    // Calculate 1% low from current buffer
-                    var (_, onePercentLow) = _uploader.GetStats();
-                    _current1PercentLow = onePercentLow;
-                }
-                else
-                {
-                    // Reset 1% low when not recording
-                    _current1PercentLow = 0;
                 }
                 
                 LiveMetrics?.Invoke(_currentFps, _currentFrametime, _current1PercentLow, GetStatus());

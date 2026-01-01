@@ -10,7 +10,7 @@ namespace FramebaseApp
 {
     public class PresentMonRecorder
     {
-        public event Action<double>? OnFpsData;
+        public event Action<double, double>? OnFpsData; // fps, 1% low
         
         private Process? _process;
         private volatile bool _isRunning = false;
@@ -124,16 +124,23 @@ namespace FramebaseApp
                     if ((now - lastEmit).TotalSeconds >= 1)
                     {
                         double avgFps = 0;
+                        double low1 = 0;
                         lock (_lock)
                         {
-                            if (_window.Count > 0)
+                            if (_window.Count > 5)
                             {
                                 double avgFrametime = _window.Average(x => x.frametime);
                                 avgFps = avgFrametime > 0 ? 1000.0 / avgFrametime : 0;
+                                
+                                // Calculate 1% Low FPS (Average of worst 1% frametimes)
+                                var sorted = _window.Select(x => x.frametime).OrderByDescending(x => x).ToList();
+                                int count = Math.Max(1, (int)(sorted.Count * 0.01));
+                                double avgWorstFrametime = sorted.Take(count).Average();
+                                low1 = avgWorstFrametime > 0 ? 1000.0 / avgWorstFrametime : 0;
                             }
                         }
                         lastEmit = now;
-                        if (avgFps > 0) { OnFpsData?.Invoke(avgFps); }
+                        if (avgFps > 0) { OnFpsData?.Invoke(avgFps, low1); }
                     }
                 }
             }
