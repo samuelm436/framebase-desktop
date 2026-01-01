@@ -19,8 +19,7 @@ namespace framebase_app
         private bool _isGameActive = false;
         private Queue<double> _frametimeBuffer = new();
         private const int MAX_FRAMETIME_POINTS = 280; // Match canvas width for 1:1 pixel scrolling
-        private DateTime _lastGraphUpdate = DateTime.MinValue;
-        private const int GRAPH_UPDATE_INTERVAL_MS = 100; // Update graph every 100ms (like Afterburner)
+        private int _lastProcessedFrametimeIndex = 0; // Track which frametimes we've already added
 
         public OverlayWindow()
         {
@@ -189,23 +188,22 @@ namespace framebase_app
             double height = FrametimeCanvas.ActualHeight;
             if (width <= 0 || height <= 0) return;
 
-            // Throttle updates to every 100ms (like Afterburner) instead of every frame
-            if ((DateTime.Now - _lastGraphUpdate).TotalMilliseconds < GRAPH_UPDATE_INTERVAL_MS)
-                return;
+            // Add ALL new frametimes since last update (like Afterburner shows every frame)
+            for (int i = _lastProcessedFrametimeIndex; i < frametimes.Count; i++)
+            {
+                _frametimeBuffer.Enqueue(frametimes[i]);
+                
+                // Keep buffer size at canvas width for 1:1 pixel scrolling
+                while (_frametimeBuffer.Count > MAX_FRAMETIME_POINTS)
+                    _frametimeBuffer.Dequeue();
+            }
             
-            _lastGraphUpdate = DateTime.Now;
-
-            // Add latest frametime to buffer (scrolling effect)
-            double latestFt = frametimes.Last();
-            _frametimeBuffer.Enqueue(latestFt);
-            
-            // Keep buffer size at canvas width for 1:1 pixel scrolling
-            while (_frametimeBuffer.Count > MAX_FRAMETIME_POINTS)
-                _frametimeBuffer.Dequeue();
+            _lastProcessedFrametimeIndex = frametimes.Count;
             
             if (_frametimeBuffer.Count < 2) return;
 
-            // Update text value
+            // Update text value with latest frametime
+            double latestFt = frametimes.Last();
             FrametimeValue.Text = $"{Math.Round(latestFt, 1)} ms";
 
             // Dynamic scaling with headroom
