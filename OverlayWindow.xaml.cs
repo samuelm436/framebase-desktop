@@ -14,6 +14,8 @@ namespace framebase_app
     public partial class OverlayWindow : Window
     {
         private Polyline? _frametimeGraph;
+        private Queue<(DateTime time, float gpu, float ram, float vram)> _loadHistory = new();
+        private const int BOTTLENECK_CHECK_SECONDS = 5;
 
         public OverlayWindow()
         {
@@ -62,24 +64,90 @@ namespace framebase_app
 
         public void UpdateHardwareInfo(FramebaseApp.HardwareMonitor.HardwareMetrics metrics)
         {
-            // Column 1: Load %
-            // Column 2: Temp °C or Absolute Value
-            
-            // CPU
+            // Only show Load %
             CpuLoad.Text = metrics.CpuLoad >= 0 ? $"{Math.Round(metrics.CpuLoad)}%" : "-";
-            CpuTemp.Text = metrics.CpuTemp >= 0 ? $"{Math.Round(metrics.CpuTemp)}°C" : "-";
-            
-            // GPU
             GpuLoad.Text = metrics.GpuLoad >= 0 ? $"{Math.Round(metrics.GpuLoad)}%" : "-";
-            GpuTemp.Text = metrics.GpuTemp >= 0 ? $"{Math.Round(metrics.GpuTemp)}°C" : "-";
-            
-            // RAM
             RamLoad.Text = metrics.RamLoad >= 0 ? $"{Math.Round(metrics.RamLoad)}%" : "-";
-            RamUsed.Text = metrics.RamUsed >= 0 ? $"{Math.Round(metrics.RamUsed, 1)} GB" : "-";
-            
-            // VRAM
             VramLoad.Text = metrics.VramLoad >= 0 ? $"{Math.Round(metrics.VramLoad)}%" : "-";
-            VramUsed.Text = metrics.VramUsed >= 0 ? $"{Math.Round(metrics.VramUsed, 1)} GB" : "-";
+
+            // Track load history for bottleneck detection
+            _loadHistory.Enqueue((DateTime.Now, metrics.GpuLoad, metrics.RamLoad, metrics.VramLoad));
+            
+            // Remove old entries (older than 5 seconds)
+            var cutoff = DateTime.Now.AddSeconds(-BOTTLENECK_CHECK_SECONDS);
+            while (_loadHistory.Count > 0 && _loadHistory.Peek().time < cutoff)
+                _loadHistory.Dequeue();
+
+            // Bottleneck analysis
+            AnalyzeBottleneck(metrics);
+        }
+
+        private void AnalyzeBottleneck(FramebaseApp.HardwareMonitor.HardwareMetrics metrics)
+        {
+            // Skip if not enough data
+            if (_loadHistory.Count < 3)
+            {
+                BottleneckWarning.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var recent = _loadHistory.ToList();
+            float avgGpu = recent.Average(x => x.gpu);
+            float avgRam = recent.Average(x => x.ram);
+            float avgVram = recent.Average(x => x.vram);
+
+            // GPU > 90% = All good (GPU is the bottleneck, which is ideal)
+            if (avgGpu >= 90)
+            {
+                BottleneckWarning.Visibility = Visibility.Collapsed;
+                GpuLoad.Foreground = Brushes.LimeGreen;
+                RamLoad.Foreground = Brushes.White;
+                VramLoad.Foreground = Brushes.White;
+                return;
+            }
+
+            // RAM or VRAM > 90% = Memory bottleneck
+            if (avgRam >= 90)
+            {
+                BottleneckWarning.Visibility = Visibility.Visible;
+                BottleneckText.Text = "⚠ RAM LIMIT";
+                BottleneckText.Foreground = Brushes.Orange;
+                RamLoad.Foreground = Brushes.Orange;
+                GpuLoad.Foreground = Brushes.White;
+                VramLoad.Foreground = Brushes.White;
+                return;
+            }
+
+            if (avgVram >= 90)
+            {
+                BottleneckWarning.Visibility = Visibility.Visible;
+                BottleneckText.Text = "⚠ VRAM LIMIT";
+                BottleneckText.Foreground = Brushes.Orange;
+                VramLoad.Foreground = Brushes.Orange;
+                GpuLoad.Foreground = Brushes.White;
+                RamLoad.Foreground = Brushes.White;
+                return;
+            }
+
+            // All < 90% for sustained period = CPU Bottleneck
+            if (avgGpu < 90 && avgRam < 90 && avgVram < 90)
+            {
+                BottleneckWarning.Visibility = Visibility.Visible;
+                BottleneckText.Text = "⚠ CPU BOTTLENECK";
+                BottleneckText.Foreground = Brushes.Red;
+                CpuLoad.Foreground = Brushes.Red;
+                GpuLoad.Foreground = Brushes.White;
+                RamLoad.Foreground = Brushes.White;
+                VramLoad.Foreground = Brushes.White;
+                return;
+            }
+
+            // Default state
+            BottleneckWarning.Visibility = Visibility.Collapsed;
+            CpuLoad.Foreground = Brushes.White;
+            GpuLoad.Foreground = Brushes.White;
+            RamLoad.Foreground = Brushes.White;
+            VramLoad.Foreground = Brushes.White;
         }
 
         public void UpdateFrametimeGraph(List<double> frametimes)

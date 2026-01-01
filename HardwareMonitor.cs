@@ -1,45 +1,51 @@
 using System;
+using System.Diagnostics;
+using System.Management;
 using System.Linq;
-using LibreHardwareMonitor.Hardware;
 
 namespace FramebaseApp
 {
     public class HardwareMonitor : IDisposable
     {
-        private readonly Computer _computer;
+        private PerformanceCounter? _cpuCounter;
+        private PerformanceCounter? _ramCounter;
+        private PerformanceCounter? _gpuEngineCounter;
+        private PerformanceCounter? _gpuMemoryCounter;
+        private ulong _totalRamMB;
+        private float _cachedVramTotal = -1;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
 
         public HardwareMonitor()
         {
-            _computer = new Computer
+            try
             {
-                IsCpuEnabled = true,
-                IsGpuEnabled = true,
-                IsMemoryEnabled = true
-            };
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _ramCounter = new PerformanceCounter("Memory", "Available MBytes");
+                _totalRamMB = GetTotalRamMB();
+                
+                _cpuCounter.NextValue();
+                _ramCounter.NextValue();
 
-            _computer.Open();
-            _computer.Accept(new UpdateVisitor());
+                InitGpuCounters();
+                _cachedVramTotal = GetVramTotalGB();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"HardwareMonitor Init Error: {ex.Message}");
+            }
         }
 
         public class HardwareMetrics
         {
             public float CpuLoad { get; set; } = -1;
-            public float CpuTemp { get; set; } = -1;
             public float GpuLoad { get; set; } = -1;
-            public float GpuTemp { get; set; } = -1;
             public float RamLoad { get; set; } = -1;
-            public float RamUsed { get; set; } = -1;
-            public float RamTotal { get; set; } = -1;
             public float VramLoad { get; set; } = -1;
-            public float VramUsed { get; set; } = -1;
-            public float VramTotal { get; set; } = -1;
         }
 
         public HardwareMetrics GetMetrics()
         {
-            // Update max once per second
             if ((DateTime.Now - _lastUpdate).TotalMilliseconds < 1000)
                 return _cachedMetrics;
 
@@ -47,99 +53,113 @@ namespace FramebaseApp
 
             try
             {
-                _computer.Accept(new UpdateVisitor());
-
                 var metrics = new HardwareMetrics();
 
-                // CPU
-                var cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
-                if (cpu != null)
+                // CPU Load
+                if (_cpuCounter != null)
+                    metrics.CpuLoad = _cpuCounter.NextValue();
+
+                // RAM Load
+                if (_ramCounter != null && _totalRamMB > 0)
                 {
-                    metrics.CpuLoad = GetSensorValue(cpu, SensorType.Load, "CPU Total") ?? -1;
-                    metrics.CpuTemp = GetSensorValue(cpu, SensorType.Temperature, "CPU Package") 
-                                   ?? GetSensorValue(cpu, SensorType.Temperature, "Core Average")
-                                   ?? GetSensorValue(cpu, SensorType.Temperature) ?? -1;
+                    float ramFreeMB = _ramCounter.NextValue();
+                    float ramUsedMB = _totalRamMB - ramFreeMB;
+                    metrics.RamLoad = (ramUsedMB / _totalRamMB) * 100f;
                 }
 
-                // GPU
-                var gpu = _computer.Hardware.FirstOrDefault(h => 
-                    h.HardwareType == HardwareType.GpuNvidia || 
-                    h.HardwareType == HardwareType.GpuAmd ||
-                    h.HardwareType == HardwareType.GpuIntel);
-                
-                if (gpu != null)
+                // GPU Load
+                if (_gpuEngineCounter != null)
                 {
-                    metrics.GpuLoad = GetSensorValue(gpu, SensorType.Load, "GPU Core") 
-                                   ?? GetSensorValue(gpu, SensorType.Load, "D3D 3D")
-                                   ?? GetSensorValue(gpu, SensorType.Load) ?? -1;
-                    
-                    metrics.GpuTemp = GetSensorValue(gpu, SensorType.Temperature, "GPU Core")
-                                   ?? GetSensorValue(gpu, SensorType.Temperature) ?? -1;
-
-                    metrics.VramUsed = GetSensorValue(gpu, SensorType.SmallData, "GPU Memory Used")
-                                    ?? GetSensorValue(gpu, SensorType.SmallData, "D3D Dedicated Memory Used") ?? -1;
-                    
-                    metrics.VramTotal = GetSensorValue(gpu, SensorType.SmallData, "GPU Memory Total") ?? -1;
-
-                    if (metrics.VramTotal > 0 && metrics.VramUsed >= 0)
-                    {
-                        metrics.VramLoad = (metrics.VramUsed / metrics.VramTotal) * 100f;
-                    }
+                    try { metrics.GpuLoad = _gpuEngineCounter.NextValue(); }
+                    catch { }
                 }
 
-                // RAM
-                var memory = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Memory);
-                if (memory != null)
+                // VRAM Load
+                if (_gpuMemoryCounter != null && _cachedVramTotal > 0)
                 {
-                    metrics.RamUsed = GetSensorValue(memory, SensorType.Data, "Memory Used") ?? -1;
-                    metrics.RamTotal = GetSensorValue(memory, SensorType.Data, "Memory Available") ?? -1;
-                    
-                    if (metrics.RamTotal > 0)
+                    try
                     {
-                        metrics.RamTotal += metrics.RamUsed;
-                        metrics.RamLoad = (metrics.RamUsed / metrics.RamTotal) * 100f;
+                        float vramUsedBytes = _gpuMemoryCounter.NextValue();
+                        float vramUsedGB = vramUsedBytes / (1024f * 1024f * 1024f);
+                        metrics.VramLoad = (vramUsedGB / _cachedVramTotal) * 100f;
                     }
+                    catch { }
                 }
 
                 _cachedMetrics = metrics;
                 return metrics;
             }
-            catch (Exception ex)
+            catch
             {
-                System.Diagnostics.Debug.WriteLine($"GetMetrics Error: {ex.Message}");
                 return _cachedMetrics;
             }
         }
 
-        private float? GetSensorValue(IHardware hardware, SensorType type, string? nameContains = null)
+        private void InitGpuCounters()
         {
-            var sensors = hardware.Sensors.Where(s => s.SensorType == type);
-            
-            if (!string.IsNullOrEmpty(nameContains))
+            try
             {
-                sensors = sensors.Where(s => s.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase));
-            }
+                if (PerformanceCounterCategory.Exists("GPU Engine"))
+                {
+                    var category = new PerformanceCounterCategory("GPU Engine");
+                    var instanceNames = category.GetInstanceNames();
+                    var gpu3dInstance = instanceNames.FirstOrDefault(name => name.Contains("engtype_3D"));
+                    if (!string.IsNullOrEmpty(gpu3dInstance))
+                    {
+                        _gpuEngineCounter = new PerformanceCounter("GPU Engine", "Utilization Percentage", gpu3dInstance);
+                        _gpuEngineCounter.NextValue();
+                    }
+                }
 
-            var sensor = sensors.FirstOrDefault();
-            return sensor?.Value;
+                if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
+                {
+                    var category = new PerformanceCounterCategory("GPU Adapter Memory");
+                    var instanceNames = category.GetInstanceNames();
+                    if (instanceNames.Length > 0)
+                    {
+                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
+                        _gpuMemoryCounter.NextValue();
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private ulong GetTotalRamMB()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT Capacity FROM Win32_PhysicalMemory");
+                ulong total = 0;
+                foreach (var obj in searcher.Get())
+                    total += Convert.ToUInt64(obj["Capacity"]);
+                return total / (1024 * 1024);
+            }
+            catch { return 16384; }
+        }
+
+        private float GetVramTotalGB()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT AdapterRAM FROM Win32_VideoController");
+                foreach (var obj in searcher.Get())
+                {
+                    var ram = Convert.ToUInt64(obj["AdapterRAM"]);
+                    if (ram > 0)
+                        return ram / (1024f * 1024f * 1024f);
+                }
+            }
+            catch { }
+            return -1;
         }
 
         public void Dispose()
         {
-            _computer.Close();
-        }
-
-        private class UpdateVisitor : IVisitor
-        {
-            public void VisitComputer(IComputer computer) => computer.Traverse(this);
-            public void VisitHardware(IHardware hardware)
-            {
-                hardware.Update();
-                foreach (var subHardware in hardware.SubHardware)
-                    subHardware.Accept(this);
-            }
-            public void VisitSensor(ISensor sensor) { }
-            public void VisitParameter(IParameter parameter) { }
+            _cpuCounter?.Dispose();
+            _ramCounter?.Dispose();
+            _gpuEngineCounter?.Dispose();
+            _gpuMemoryCounter?.Dispose();
         }
     }
 }
