@@ -208,7 +208,25 @@ namespace framebase_app
                             ? $"{Math.Round(avgFps, 1)} FPS | 1%: {Math.Round(low1, 1)}" 
                             : "Upload failed";
                         summary.Foreground = ok ? (Brush)FindResource("Brush.SuccessText") : Brushes.Red;
-                        summary.ToolTip = ok ? null : msg;
+                        
+                        // Set tooltip to show error details on failure
+                        if (ok)
+                        {
+                            summary.ToolTip = null;
+                        }
+                        else
+                        {
+                            var tooltip = new System.Windows.Controls.ToolTip
+                            {
+                                Content = msg,
+                                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                                Foreground = Brushes.White,
+                                Padding = new Thickness(8),
+                                BorderBrush = Brushes.Red,
+                                BorderThickness = new Thickness(1)
+                            };
+                            summary.ToolTip = tooltip;
+                        }
                     }
                 });
             };
