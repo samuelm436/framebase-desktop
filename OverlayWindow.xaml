@@ -31,46 +31,39 @@
             <!-- Frametime Graph Section -->
             <StackPanel x:Name="GraphSection">
                 <Grid>
-                    <Border Height="40" Width="200" BorderBrush="#44FFFFFF" BorderThickness="0,0,0,1" Margin="0,0,0,8" HorizontalAlignment="Left">
+                    <Border Height="50" Width="280" BorderBrush="#44FFFFFF" BorderThickness="0,0,0,1" Margin="0,0,0,4" HorizontalAlignment="Left">
                         <Canvas x:Name="FrametimeCanvas" ClipToBounds="True"/>
                     </Border>
                     <TextBlock x:Name="FrametimeValue" Text="6.9 ms" Foreground="#AAAAAA" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,0,0" Effect="{StaticResource TextShadow}"/>
                 </Grid>
             </StackPanel>
 
-            <!-- Hardware Stats Grid -->
-            <Grid x:Name="HardwareSection" Margin="0,0,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="60"/>
-                    <ColumnDefinition Width="70"/>
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-
-                <!-- Headers -->
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="" Foreground="#AAAAAA" FontSize="9" Effect="{StaticResource TextShadow}"/>
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="LOAD" Foreground="#AAAAAA" FontSize="9" Effect="{StaticResource TextShadow}"/>
-
+            <!-- Hardware Stats Row (Compact) -->
+            <StackPanel x:Name="HardwareSection" Orientation="Horizontal" Margin="0,4,0,0">
                 <!-- CPU -->
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="CPU" Foreground="#00F0FF" FontWeight="Bold" FontSize="11" Effect="{StaticResource TextShadow}"/>
-                <TextBlock x:Name="CpuLoad" Grid.Row="1" Grid.Column="1" Text="-" Foreground="White" FontSize="11" Effect="{StaticResource TextShadow}"/>
+                <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="CPU" Foreground="#00F0FF" FontWeight="Bold" FontSize="10" Effect="{StaticResource TextShadow}"/>
+                    <TextBlock x:Name="CpuLoad" Text="-" Foreground="White" FontSize="13" FontWeight="SemiBold" Effect="{StaticResource TextShadow}"/>
+                </StackPanel>
 
                 <!-- GPU -->
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="GPU" Foreground="#00F0FF" FontWeight="Bold" FontSize="11" Effect="{StaticResource TextShadow}"/>
-                <TextBlock x:Name="GpuLoad" Grid.Row="2" Grid.Column="1" Text="-" Foreground="White" FontSize="11" Effect="{StaticResource TextShadow}"/>
+                <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="GPU" Foreground="#00F0FF" FontWeight="Bold" FontSize="10" Effect="{StaticResource TextShadow}"/>
+                    <TextBlock x:Name="GpuLoad" Text="-" Foreground="White" FontSize="13" FontWeight="SemiBold" Effect="{StaticResource TextShadow}"/>
+                </StackPanel>
 
                 <!-- RAM -->
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="RAM" Foreground="#00F0FF" FontWeight="Bold" FontSize="11" Effect="{StaticResource TextShadow}"/>
-                <TextBlock x:Name="RamLoad" Grid.Row="3" Grid.Column="1" Text="-" Foreground="White" FontSize="11" Effect="{StaticResource TextShadow}"/>
+                <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="RAM" Foreground="#00F0FF" FontWeight="Bold" FontSize="10" Effect="{StaticResource TextShadow}"/>
+                    <TextBlock x:Name="RamLoad" Text="-" Foreground="White" FontSize="13" FontWeight="SemiBold" Effect="{StaticResource TextShadow}"/>
+                </StackPanel>
 
                 <!-- VRAM -->
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="VRAM" Foreground="#00F0FF" FontWeight="Bold" FontSize="11" Effect="{StaticResource TextShadow}"/>
-                <TextBlock x:Name="VramLoad" Grid.Row="4" Grid.Column="1" Text="-" Foreground="White" FontSize="11" Effect="{StaticResource TextShadow}"/>
-            </Grid>
+                <StackPanel Margin="0,0,0,0">
+                    <TextBlock Text="VRAM" Foreground="#00F0FF" FontWeight="Bold" FontSize="10" Effect="{StaticResource TextShadow}"/>
+                    <TextBlock x:Name="VramLoad" Text="-" Foreground="White" FontSize="13" FontWeight="SemiBold" Effect="{StaticResource TextShadow}"/>
+                </StackPanel>
+            </StackPanel>
 
             <!-- Bottleneck Warning -->
             <Border x:Name="BottleneckWarning" Background="#CC000000" CornerRadius="3" Padding="6,3" Margin="0,8,0,0" Visibility="Collapsed">

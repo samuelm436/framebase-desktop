@@ -32,10 +32,16 @@ namespace framebase_app
         {
             _frametimeGraph = new Polyline
             {
-                Stroke = Brushes.LimeGreen,
-                StrokeThickness = 1,
-                SnapsToDevicePixels = true
+                Stroke = new SolidColorBrush(Color.FromRgb(0, 255, 0)),
+                StrokeThickness = 1.5,
+                SnapsToDevicePixels = false,
+                UseLayoutRounding = false
             };
+            
+            // Enable anti-aliasing for smooth lines
+            RenderOptions.SetEdgeMode(_frametimeGraph, EdgeMode.Unspecified);
+            RenderOptions.SetBitmapScalingMode(_frametimeGraph, BitmapScalingMode.HighQuality);
+            
             FrametimeCanvas.Children.Add(_frametimeGraph);
         }
 
@@ -158,26 +164,27 @@ namespace framebase_app
             double height = FrametimeCanvas.ActualHeight;
             if (width <= 0 || height <= 0) return;
 
-            // Keep last N points to fill width
-            int maxPoints = (int)width; 
+            // Keep enough points to fill width smoothly (more points = smoother)
+            int maxPoints = (int)(width * 1.5); 
             var points = frametimes.TakeLast(maxPoints).ToList();
             
             if (points.Count == 0) return;
 
+            // Dynamic scaling with headroom
             double maxFt = points.Max();
-            if (maxFt < 16.6) maxFt = 16.6; // Scale at least to 60fps
+            double targetMax = Math.Max(maxFt * 1.2, 16.6); // 20% headroom or at least 60fps line
             
             // Update text value
             FrametimeValue.Text = $"{Math.Round(points.Last(), 1)} ms";
 
             var collection = new PointCollection();
-            double step = width / Math.Max(points.Count - 1, 1);
-
+            
+            // Smooth interpolation - distribute points evenly across width
             for (int i = 0; i < points.Count; i++)
             {
-                double x = i * step;
-                // Invert Y because 0 is top
-                double y = height - ((points[i] / maxFt) * height);
+                double x = (i / (double)(points.Count - 1)) * width;
+                double normalizedValue = Math.Min(points[i] / targetMax, 1.0);
+                double y = height - (normalizedValue * height);
                 collection.Add(new Point(x, y));
             }
 
