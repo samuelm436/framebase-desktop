@@ -16,6 +16,7 @@ namespace framebase_app
         private Polyline? _frametimeGraph;
         private Queue<(DateTime time, float gpu, float ram, float vram)> _loadHistory = new();
         private const int BOTTLENECK_CHECK_SECONDS = 5;
+        private bool _isGameActive = false;
 
         public OverlayWindow()
         {
@@ -47,6 +48,8 @@ namespace framebase_app
 
         public void UpdateMetrics(double fps, double low1, double avg, bool isActive, bool isSupported)
         {
+            _isGameActive = isActive;
+            
             FpsValue.Text = Math.Round(fps).ToString();
             LowValue.Text = Math.Round(low1).ToString();
             AvgValue.Text = Math.Round(avg).ToString();
@@ -76,6 +79,15 @@ namespace framebase_app
             RamLoad.Text = metrics.RamLoad >= 0 ? $"{Math.Round(metrics.RamLoad)}%" : "-";
             VramLoad.Text = metrics.VramLoad >= 0 ? $"{Math.Round(metrics.VramLoad)}%" : "-";
 
+            // Only analyze bottleneck if game is active
+            if (!_isGameActive)
+            {
+                BottleneckWarning.Visibility = Visibility.Collapsed;
+                ResetLoadColors();
+                _loadHistory.Clear();
+                return;
+            }
+
             // Track load history for bottleneck detection
             _loadHistory.Enqueue((DateTime.Now, metrics.GpuLoad, metrics.RamLoad, metrics.VramLoad));
             
@@ -88,12 +100,21 @@ namespace framebase_app
             AnalyzeBottleneck(metrics);
         }
 
+        private void ResetLoadColors()
+        {
+            CpuLoad.Foreground = Brushes.White;
+            GpuLoad.Foreground = Brushes.White;
+            RamLoad.Foreground = Brushes.White;
+            VramLoad.Foreground = Brushes.White;
+        }
+
         private void AnalyzeBottleneck(FramebaseApp.HardwareMonitor.HardwareMetrics metrics)
         {
             // Skip if not enough data
             if (_loadHistory.Count < 3)
             {
                 BottleneckWarning.Visibility = Visibility.Collapsed;
+                ResetLoadColors();
                 return;
             }
 
@@ -109,6 +130,7 @@ namespace framebase_app
                 GpuLoad.Foreground = Brushes.LimeGreen;
                 RamLoad.Foreground = Brushes.White;
                 VramLoad.Foreground = Brushes.White;
+                CpuLoad.Foreground = Brushes.White;
                 return;
             }
 
@@ -121,6 +143,7 @@ namespace framebase_app
                 RamLoad.Foreground = Brushes.Orange;
                 GpuLoad.Foreground = Brushes.White;
                 VramLoad.Foreground = Brushes.White;
+                CpuLoad.Foreground = Brushes.White;
                 return;
             }
 
@@ -132,6 +155,7 @@ namespace framebase_app
                 VramLoad.Foreground = Brushes.Orange;
                 GpuLoad.Foreground = Brushes.White;
                 RamLoad.Foreground = Brushes.White;
+                CpuLoad.Foreground = Brushes.White;
                 return;
             }
 
@@ -150,10 +174,7 @@ namespace framebase_app
 
             // Default state
             BottleneckWarning.Visibility = Visibility.Collapsed;
-            CpuLoad.Foreground = Brushes.White;
-            GpuLoad.Foreground = Brushes.White;
-            RamLoad.Foreground = Brushes.White;
-            VramLoad.Foreground = Brushes.White;
+            ResetLoadColors();
         }
 
         public void UpdateFrametimeGraph(List<double> frametimes)

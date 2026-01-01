@@ -99,18 +99,28 @@ namespace FramebaseApp
         {
             try
             {
+                // GPU Load - Aggregate all 3D engines
                 if (PerformanceCounterCategory.Exists("GPU Engine"))
                 {
                     var category = new PerformanceCounterCategory("GPU Engine");
                     var instanceNames = category.GetInstanceNames();
-                    var gpu3dInstance = instanceNames.FirstOrDefault(name => name.Contains("engtype_3D"));
-                    if (!string.IsNullOrEmpty(gpu3dInstance))
+                    
+                    // Find all 3D engine instances for the primary GPU
+                    var gpu3dInstances = instanceNames
+                        .Where(name => name.Contains("engtype_3D") && name.Contains("pid_0"))
+                        .ToList();
+                    
+                    if (gpu3dInstances.Count > 0)
                     {
-                        _gpuEngineCounter = new PerformanceCounter("GPU Engine", "Utilization Percentage", gpu3dInstance);
+                        // Use first 3D instance (usually sufficient)
+                        _gpuEngineCounter = new PerformanceCounter("GPU Engine", "Utilization Percentage", gpu3dInstances[0]);
                         _gpuEngineCounter.NextValue();
+                        
+                        Console.WriteLine($"GPU Counter: {gpu3dInstances[0]}");
                     }
                 }
 
+                // VRAM Usage
                 if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 {
                     var category = new PerformanceCounterCategory("GPU Adapter Memory");
@@ -119,10 +129,15 @@ namespace FramebaseApp
                     {
                         _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
                         _gpuMemoryCounter.NextValue();
+                        
+                        Console.WriteLine($"VRAM Counter: {instanceNames[0]}");
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"GPU Counter Init Error: {ex.Message}");
+            }
         }
 
         private ulong GetTotalRamMB()
