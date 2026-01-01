@@ -20,6 +20,7 @@ namespace FramebaseApp
         private HardwareMetrics _cachedMetrics = new();
         private DateTime _lastVramCheck = DateTime.MinValue;
         private int _vramFailCount = 0; // Track consecutive failures
+        private int _vramPrimingCount = 0; // Counter needs several reads before stable
 
         public HardwareMonitor()
         {
@@ -109,34 +110,40 @@ namespace FramebaseApp
                         {
                             float vramUsedBytes = _gpuMemoryCounter.NextValue();
                             
-                            // Validate the value is reasonable
-                            if (vramUsedBytes >= 0 && vramUsedBytes <= _vramTotalBytes * 1.1f) // Allow 10% overhead
+                            // Performance Counters need several reads before stable (priming period)
+                            if (_vramPrimingCount < 5)
                             {
+                                _vramPrimingCount++;
+                                // Use cached value during priming, don't update
+                            }
+                            else if (vramUsedBytes >= 0 && vramUsedBytes <= _vramTotalBytes * 1.1f)
+                            {
+                                // Valid reading
                                 metrics.VramLoad = (vramUsedBytes / _vramTotalBytes) * 100f;
-                                _vramFailCount = 0; // Reset fail counter on success
+                                _vramFailCount = 0;
                             }
                             else
                             {
-                                // Invalid value, increment fail count
+                                // Out of range - keep trying but count failures
                                 _vramFailCount++;
-                                if (_vramFailCount > 3)
+                                if (_vramFailCount > 5)
                                 {
-                                    // Too many failures, re-init counter
                                     _gpuMemoryCounter?.Dispose();
                                     _gpuMemoryCounter = null;
                                     _vramFailCount = 0;
+                                    _vramPrimingCount = 0;
                                 }
                             }
                         }
                         catch
                         {
-                            // Counter failed, increment fail count
                             _vramFailCount++;
-                            if (_vramFailCount > 3)
+                            if (_vramFailCount > 5)
                             {
                                 _gpuMemoryCounter?.Dispose();
                                 _gpuMemoryCounter = null;
                                 _vramFailCount = 0;
+                                _vramPrimingCount = 0;
                             }
                         }
                     }
@@ -186,34 +193,51 @@ namespace FramebaseApp
         {
             try
             {
-                // VRAM Usage - Dedicated Usage (same as Task Manager)
-                if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
+                // Task Manager verwendet "GPU Adapter Memory" -> "Dedicated Usage"
+                // Diese API ist die offizielle Windows Performance Counter API
+                if (!PerformanceCounterCategory.Exists("GPU Adapter Memory"))
+                    return;
+
+                var category = new PerformanceCounterCategory("GPU Adapter Memory");
+                var instanceNames = category.GetInstanceNames();
+                
+                if (instanceNames == null || instanceNames.Length == 0)
+                    return;
+
+                // Wenn wir bereits eine Instance haben, verwende diese
+                // Ansonsten nimm die erste (wie Task Manager)
+                string? targetInstance = null;
+                
+                if (!string.IsNullOrEmpty(_vramCounterInstance) && instanceNames.Contains(_vramCounterInstance))
                 {
-                    var category = new PerformanceCounterCategory("GPU Adapter Memory");
-                    var instanceNames = category.GetInstanceNames();
-                    
-                    // Task Manager uses the first GPU instance, or stored instance if available
-                    string? targetInstance = _vramCounterInstance ?? instanceNames.FirstOrDefault();
-                    
-                    if (!string.IsNullOrEmpty(targetInstance) && instanceNames.Contains(targetInstance))
-                    {
-                        _gpuMemoryCounter?.Dispose();
-                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", targetInstance, true);
-                        
-                        // Prime the counter (first read is often 0)
-                        _gpuMemoryCounter.NextValue();
-                        System.Threading.Thread.Sleep(100);
-                        _gpuMemoryCounter.NextValue();
-                        
-                        // Store the instance for future re-init
-                        _vramCounterInstance = targetInstance;
-                    }
+                    targetInstance = _vramCounterInstance;
                 }
+                else
+                {
+                    // Finde die beste Instance - bevorzuge die mit "0" (erste GPU)
+                    targetInstance = instanceNames.FirstOrDefault(n => n.EndsWith("0")) ?? instanceNames[0];
+                    _vramCounterInstance = targetInstance;
+                }
+                
+                if (string.IsNullOrEmpty(targetInstance))
+                    return;
+
+                // Erstelle Counter genau wie Task Manager: ReadOnly mode
+                _gpuMemoryCounter?.Dispose();
+                _gpuMemoryCounter = new PerformanceCounter(
+                    "GPU Adapter Memory", 
+                    "Dedicated Usage", 
+                    targetInstance, 
+                    readOnly: true);
+                
+                // Reset priming counter for new instance
+                _vramPrimingCount = 0;
             }
             catch 
             { 
                 _gpuMemoryCounter?.Dispose();
                 _gpuMemoryCounter = null;
+                _vramCounterInstance = null;
             }
         }
 
