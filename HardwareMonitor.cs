@@ -12,7 +12,7 @@ namespace FramebaseApp
         private PerformanceCounter? _ramCounter;
         private List<PerformanceCounter> _gpuEngineCounters = new();
         private PerformanceCounter? _gpuMemoryCounter;
-        private PerformanceCounter? _gpuMemoryTotalCounter;
+        private float _vramTotalGB = -1;
         private ulong _totalRamMB;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
@@ -29,6 +29,7 @@ namespace FramebaseApp
                 _ramCounter.NextValue();
 
                 InitGpuCounters();
+                _vramTotalGB = GetVramTotalGB();
             }
             catch (Exception ex)
             {
@@ -88,18 +89,14 @@ namespace FramebaseApp
                     catch { }
                 }
 
-                // VRAM Load - Percentage based on Dedicated Usage / Total
-                if (_gpuMemoryCounter != null && _gpuMemoryTotalCounter != null)
+                // VRAM Load - Use Physical VRAM Total (like Task Manager)
+                if (_gpuMemoryCounter != null && _vramTotalGB > 0)
                 {
                     try
                     {
                         float vramUsedBytes = _gpuMemoryCounter.NextValue();
-                        float vramTotalBytes = _gpuMemoryTotalCounter.NextValue();
-                        
-                        if (vramTotalBytes > 0)
-                        {
-                            metrics.VramLoad = (vramUsedBytes / vramTotalBytes) * 100f;
-                        }
+                        float vramUsedGB = vramUsedBytes / (1024f * 1024f * 1024f);
+                        metrics.VramLoad = (vramUsedGB / _vramTotalGB) * 100f;
                     }
                     catch { }
                 }
@@ -142,7 +139,7 @@ namespace FramebaseApp
                     }
                 }
 
-                // VRAM Usage - Get both Used and Total (same as Task Manager "Dedicated GPU Memory")
+                // VRAM Usage - Only Dedicated Usage (Task Manager uses physical VRAM total from WMI)
                 if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 {
                     var category = new PerformanceCounterCategory("GPU Adapter Memory");
@@ -152,20 +149,9 @@ namespace FramebaseApp
                     {
                         var instance = instanceNames[0];
                         
-                        // Dedicated Usage (bytes in use)
+                        // Dedicated Usage (bytes in use) - same as Task Manager
                         _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instance);
                         _gpuMemoryCounter.NextValue();
-                        
-                        // Total Committed (total available)
-                        try
-                        {
-                            _gpuMemoryTotalCounter = new PerformanceCounter("GPU Adapter Memory", "Total Committed", instance);
-                            _gpuMemoryTotalCounter.NextValue();
-                        }
-                        catch
-                        {
-                            // Fallback: try to use a fixed total or alternative counter
-                        }
                         
                         Console.WriteLine($"VRAM Counter: {instance}");
                     }
@@ -175,6 +161,26 @@ namespace FramebaseApp
             {
                 Console.WriteLine($"GPU Counter Init Error: {ex.Message}");
             }
+        }
+
+        private float GetVramTotalGB()
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("SELECT AdapterRAM FROM Win32_VideoController");
+                foreach (var obj in searcher.Get())
+                {
+                    var ram = Convert.ToUInt64(obj["AdapterRAM"]);
+                    if (ram > 0)
+                    {
+                        float totalGB = ram / (1024f * 1024f * 1024f);
+                        Console.WriteLine($"Physical VRAM Total: {totalGB:F2} GB");
+                        return totalGB;
+                    }
+                }
+            }
+            catch { }
+            return -1;
         }
 
         private ulong GetTotalRamMB()
@@ -197,7 +203,6 @@ namespace FramebaseApp
             foreach (var counter in _gpuEngineCounters)
                 counter?.Dispose();
             _gpuMemoryCounter?.Dispose();
-            _gpuMemoryTotalCounter?.Dispose();
         }
     }
 }
