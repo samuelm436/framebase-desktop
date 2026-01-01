@@ -73,25 +73,6 @@ namespace FramebaseApp
             catch { return "Unbekannt"; }
         }
 
-        public static string GetCpuId()
-        {
-            try
-            {
-                var searcher = new ManagementObjectSearcher("select ProcessorId, Name from Win32_Processor");
-                foreach (var o in searcher.Get())
-                {
-                    string processorId = o["ProcessorId"]?.ToString() ?? "";
-                    string name = o["Name"]?.ToString() ?? "";
-                    
-                    // Kombiniere ProcessorId und Name für eindeutige ID
-                    string combined = $"{processorId}|{name}";
-                    return GenerateStableHash(combined);
-                }
-                return GenerateStableHash("unknown-cpu");
-            }
-            catch { return GenerateStableHash("unknown-cpu"); }
-        }
-
         public static string GetRam()
         {
             try
@@ -399,6 +380,74 @@ namespace FramebaseApp
                 return "UNKNOWN";
             }
             catch { return "UNKNOWN"; }
+        }
+
+        // Get CPUID in format "VendorString:Family-Model-Stepping" (e.g., "GenuineIntel:06-B7-09")
+        public static string GetCpuId()
+        {
+            try
+            {
+                var searcher = new ManagementObjectSearcher("select * from Win32_Processor");
+                foreach (var o in searcher.Get())
+                {
+                    // Get vendor string (GenuineIntel or AuthenticAMD)
+                    string manufacturer = o["Manufacturer"]?.ToString()?.ToLower() ?? "";
+                    string vendorString = "";
+                    
+                    if (manufacturer.Contains("intel"))
+                        vendorString = "GenuineIntel";
+                    else if (manufacturer.Contains("amd") || manufacturer.Contains("advanced micro devices"))
+                        vendorString = "AuthenticAMD";
+                    else
+                        return GenerateStableHash($"{o["ProcessorId"]}|{o["Name"]}"); // Fallback to hash for unknown vendors
+                    
+                    // Parse ProcessorId to extract Family, Model, Stepping
+                    // ProcessorId format varies, but typically contains these values
+                    string processorId = o["ProcessorId"]?.ToString() ?? "";
+                    
+                    // Try to extract from ProcessorId (usually in hex format)
+                    // Example: BFEBFBFF000906E9 for Intel
+                    if (!string.IsNullOrEmpty(processorId) && processorId.Length >= 16)
+                    {
+                        try
+                        {
+                            // Last 8 hex digits contain Family_Model_Stepping info
+                            string lastEightDigits = processorId.Substring(processorId.Length - 8);
+                            uint cpuidValue = Convert.ToUInt32(lastEightDigits, 16);
+                            
+                            // Extract Family, Model, Stepping from CPUID value
+                            // CPUID format: bits 0-3: Stepping, 4-7: Model, 8-11: Family, 12-13: Type, 16-19: Extended Model, 20-27: Extended Family
+                            int stepping = (int)(cpuidValue & 0xF);
+                            int model = (int)((cpuidValue >> 4) & 0xF);
+                            int family = (int)((cpuidValue >> 8) & 0xF);
+                            int extendedModel = (int)((cpuidValue >> 16) & 0xF);
+                            int extendedFamily = (int)((cpuidValue >> 20) & 0xFF);
+                            
+                            // Calculate effective Family and Model
+                            int effectiveFamily = family;
+                            if (family == 0xF)
+                                effectiveFamily = family + extendedFamily;
+                            
+                            int effectiveModel = model;
+                            if (family == 0x6 || family == 0xF)
+                                effectiveModel = (extendedModel << 4) + model;
+                            
+                            // Format as CPUID: VendorString:Family-Model-Stepping
+                            string cpuid = $"{vendorString}:{effectiveFamily:X2}-{effectiveModel:X2}-{stepping:X2}";
+                            return cpuid;
+                        }
+                        catch
+                        {
+                            // If parsing fails, fall through to hash method
+                        }
+                    }
+                    
+                    // Fallback: Generate stable hash
+                    return GenerateStableHash($"{processorId}|{o["Name"]}");
+                }
+                return GenerateStableHash("unknown-cpu");
+            }
+            catch { return GenerateStableHash("unknown-cpu"); }
         }
 
         private static string GenerateStableHash(string input)
