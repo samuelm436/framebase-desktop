@@ -95,7 +95,9 @@
                             <Border Grid.Column="4" CornerRadius="8" Padding="12" Background="#22343A" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="Last Measurement" Foreground="{StaticResource Brush.TextMuted}" FontSize="10" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="LastSessionSummary" Text="—" Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,2,0,0" Cursor="Help"/>
+                                    <TextBlock x:Name="LastSessionSummary" Text="—" Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,2,0,0" Cursor="Help"
+                                               ToolTipService.ShowDuration="10000"
+                                               ToolTipService.InitialShowDelay="300"/>
                                 </StackPanel>
                             </Border>
                         </Grid>

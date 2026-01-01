@@ -210,22 +210,30 @@ namespace framebase_app
                         summary.Foreground = ok ? (Brush)FindResource("Brush.SuccessText") : Brushes.Red;
                         
                         // Set tooltip to show error details on failure
-                        if (ok)
+                        if (!ok && !string.IsNullOrEmpty(msg))
                         {
-                            summary.ToolTip = null;
+                            var tooltipTextBlock = new TextBlock
+                            {
+                                Text = msg,
+                                Foreground = Brushes.White,
+                                TextWrapping = TextWrapping.Wrap,
+                                MaxWidth = 400
+                            };
+                            
+                            var tooltip = new System.Windows.Controls.ToolTip
+                            {
+                                Content = tooltipTextBlock,
+                                Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
+                                BorderBrush = new SolidColorBrush(Color.FromRgb(220, 53, 69)),
+                                BorderThickness = new Thickness(1),
+                                Padding = new Thickness(8),
+                                HasDropShadow = true
+                            };
+                            summary.ToolTip = tooltip;
                         }
                         else
                         {
-                            var tooltip = new System.Windows.Controls.ToolTip
-                            {
-                                Content = msg,
-                                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
-                                Foreground = Brushes.White,
-                                Padding = new Thickness(8),
-                                BorderBrush = Brushes.Red,
-                                BorderThickness = new Thickness(1)
-                            };
-                            summary.ToolTip = tooltip;
+                            summary.ToolTip = null;
                         }
                     }
                 });
