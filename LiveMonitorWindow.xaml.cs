@@ -50,6 +50,15 @@ namespace framebase_app
         {
             InitializeComponent();
 
+            // Check if device is connected - if not, redirect to setup
+            if (!IsDeviceConnected())
+            {
+                var setupWindow = new SetupWindow();
+                setupWindow.Show();
+                this.Close();
+                return;
+            }
+
             // Initialize Hardware Monitor
             _hardwareMonitor = new HardwareMonitor();
 
@@ -120,8 +129,8 @@ namespace framebase_app
             if (FindName("CloseOverlaySettingsButton") is Button closeOverlayBtn)
                 closeOverlayBtn.Click += (_, __) => ShowOverlay("overlay_settings", false);
 
-            if (FindName("PairButton") is Button pairBtn)
-                pairBtn.Click += async (_, __) => await PairButton_Click();
+            if (FindName("ReconnectButton") is Button reconnectBtn)
+                reconnectBtn.Click += ReconnectButton_Click;
             
             // Account control buttons
             if (FindName("UnpairButton") is Button unpairBtn)
@@ -768,30 +777,18 @@ namespace framebase_app
             }
         }
 
-        private async Task PairButton_Click()
+        private void ReconnectButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (FindName("PairCodeTextBox") is TextBox codeBox)
-                {
-                    var code = codeBox.Text?.Trim();
-                    if (string.IsNullOrEmpty(code))
-                    {
-                        // Empty code - do nothing
-                        return;
-                    }
-
-                    codeBox.IsEnabled = false;
-                    var msg = await _pairingService.PairDeviceAsync(code!);
-                    // Pairing completed - no UI feedback needed
-                    codeBox.IsEnabled = true;
-
-                    await RefreshAccountStatus();
-                }
+                // Close this window and open setup
+                var setupWindow = new SetupWindow();
+                setupWindow.Show();
+                this.Close();
             }
             catch
             {
-                // Pairing error - no UI feedback needed
+                // Error opening setup window
             }
         }
 
@@ -1089,6 +1086,16 @@ namespace framebase_app
             }
             
             base.OnClosing(e);
+        }
+
+        private bool IsDeviceConnected()
+        {
+            // Check if any token file exists
+            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            return File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE)) || 
+                   File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE_LEGACY)) ||
+                   File.Exists(PairingService.TOKEN_FILE) || 
+                   File.Exists(PairingService.TOKEN_FILE_LEGACY);
         }
 
         #endregion

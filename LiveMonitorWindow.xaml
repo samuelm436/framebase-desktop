@@ -267,11 +267,10 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Not connected: show pairing UI -->
+                        <!-- Not connected: show reconnect option -->
                         <StackPanel x:Name="NotConnectedPanel" Orientation="Vertical" Margin="0,0,0,12" HorizontalAlignment="Center">
-                            <TextBlock Text="Connect to account via pairing code" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,8"/>
-                            <TextBox x:Name="PairCodeTextBox" Width="300" Height="34" Style="{StaticResource ModernTextBox}" />
-                            <Button x:Name="PairButton" Content="Connect" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0" Width="140" HorizontalAlignment="Center"/>
+                            <TextBlock Text="This device is not connected to your account" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,8" TextAlignment="Center"/>
+                            <Button x:Name="ReconnectButton" Content="Connect Device" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0" Width="160" HorizontalAlignment="Center"/>
                         </StackPanel>
 
                         <!-- Connected: show unpair button -->
