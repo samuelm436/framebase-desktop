@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace framebase_app
 {
@@ -20,6 +21,8 @@ namespace framebase_app
         private Queue<double> _frametimeBuffer = new();
         private const int MAX_FRAMETIME_POINTS = 280; // Match canvas width for 1:1 pixel scrolling
         private int _lastProcessedFrametimeIndex = 0; // Track which frametimes we've already added
+        private DispatcherTimer? _graphRenderTimer;
+        private List<double>? _latestFrametimes; // Store latest frametimes for rendering
 
         public OverlayWindow()
         {
@@ -47,6 +50,14 @@ namespace framebase_app
             RenderOptions.SetBitmapScalingMode(_frametimeGraph, BitmapScalingMode.HighQuality);
             
             FrametimeCanvas.Children.Add(_frametimeGraph);
+
+            // Start 60 FPS rendering timer for smooth graph updates
+            _graphRenderTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(16.67) // ~60 FPS
+            };
+            _graphRenderTimer.Tick += (s, e) => RenderGraph();
+            _graphRenderTimer.Start();
         }
 
         public void UpdateMetrics(double fps, double low1, double avg, bool isActive, bool isSupported)
@@ -182,11 +193,10 @@ namespace framebase_app
 
         public void UpdateFrametimeGraph(List<double> frametimes)
         {
-            if (frametimes == null || frametimes.Count == 0 || _frametimeGraph == null) return;
+            if (frametimes == null || frametimes.Count == 0) return;
 
-            double width = FrametimeCanvas.ActualWidth;
-            double height = FrametimeCanvas.ActualHeight;
-            if (width <= 0 || height <= 0) return;
+            // Store latest frametimes for rendering
+            _latestFrametimes = frametimes;
 
             // Add ALL new frametimes since last update (like Afterburner shows every frame)
             for (int i = _lastProcessedFrametimeIndex; i < frametimes.Count; i++)
@@ -199,12 +209,22 @@ namespace framebase_app
             }
             
             _lastProcessedFrametimeIndex = frametimes.Count;
-            
-            if (_frametimeBuffer.Count < 2) return;
+        }
+
+        private void RenderGraph()
+        {
+            if (_frametimeGraph == null || _frametimeBuffer.Count < 2) return;
+
+            double width = FrametimeCanvas.ActualWidth;
+            double height = FrametimeCanvas.ActualHeight;
+            if (width <= 0 || height <= 0) return;
 
             // Update text value with latest frametime
-            double latestFt = frametimes.Last();
-            FrametimeValue.Text = $"{Math.Round(latestFt, 1)} ms";
+            if (_latestFrametimes != null && _latestFrametimes.Count > 0)
+            {
+                double latestFt = _latestFrametimes.Last();
+                FrametimeValue.Text = $"{Math.Round(latestFt, 1)} ms";
+            }
 
             // Dynamic scaling with headroom
             double maxFt = _frametimeBuffer.Max();
