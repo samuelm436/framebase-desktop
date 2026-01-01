@@ -17,6 +17,7 @@ namespace FramebaseApp
         private ulong _totalRamMB;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
+        private DateTime _lastVramCheck = DateTime.MinValue;
 
         public HardwareMonitor()
         {
@@ -91,14 +92,38 @@ namespace FramebaseApp
                 }
 
                 // VRAM Load - Task Manager uses Dedicated Usage / Physical VRAM
-                if (_gpuMemoryCounter != null && _vramTotalBytes > 0)
+                if (_vramTotalBytes > 0)
                 {
-                    try
+                    // Re-initialize VRAM counter if needed (every 5 seconds check)
+                    if (_gpuMemoryCounter == null && (DateTime.Now - _lastVramCheck).TotalSeconds > 5)
                     {
-                        float vramUsedBytes = _gpuMemoryCounter.NextValue();
-                        metrics.VramLoad = (vramUsedBytes / _vramTotalBytes) * 100f;
+                        _lastVramCheck = DateTime.Now;
+                        InitVramCounter();
                     }
-                    catch { }
+
+                    if (_gpuMemoryCounter != null)
+                    {
+                        try
+                        {
+                            float vramUsedBytes = _gpuMemoryCounter.NextValue();
+                            if (vramUsedBytes >= 0 && vramUsedBytes <= _vramTotalBytes)
+                            {
+                                metrics.VramLoad = (vramUsedBytes / _vramTotalBytes) * 100f;
+                            }
+                            else if (vramUsedBytes < 0)
+                            {
+                                // Counter returned invalid value, re-init on next cycle
+                                _gpuMemoryCounter?.Dispose();
+                                _gpuMemoryCounter = null;
+                            }
+                        }
+                        catch
+                        {
+                            // Counter failed, re-init on next cycle
+                            _gpuMemoryCounter?.Dispose();
+                            _gpuMemoryCounter = null;
+                        }
+                    }
                 }
 
                 _cachedMetrics = metrics;
@@ -136,6 +161,15 @@ namespace FramebaseApp
                     }
                 }
 
+                InitVramCounter();
+            }
+            catch { }
+        }
+
+        private void InitVramCounter()
+        {
+            try
+            {
                 // VRAM Usage - Dedicated Usage (same as Task Manager)
                 if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 {
@@ -144,8 +178,9 @@ namespace FramebaseApp
                     
                     if (instanceNames.Length > 0)
                     {
+                        _gpuMemoryCounter?.Dispose();
                         _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
-                        _gpuMemoryCounter.NextValue();
+                        _gpuMemoryCounter.NextValue(); // Prime the counter
                     }
                 }
             }

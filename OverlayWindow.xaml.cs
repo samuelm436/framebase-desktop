@@ -19,6 +19,8 @@ namespace framebase_app
         private bool _isGameActive = false;
         private Queue<double> _frametimeBuffer = new();
         private const int MAX_FRAMETIME_POINTS = 280; // Match canvas width for 1:1 pixel scrolling
+        private DateTime _lastGraphUpdate = DateTime.MinValue;
+        private const int GRAPH_UPDATE_INTERVAL_MS = 100; // Update graph every 100ms (like Afterburner)
 
         public OverlayWindow()
         {
@@ -186,6 +188,12 @@ namespace framebase_app
             double width = FrametimeCanvas.ActualWidth;
             double height = FrametimeCanvas.ActualHeight;
             if (width <= 0 || height <= 0) return;
+
+            // Throttle updates to every 100ms (like Afterburner) instead of every frame
+            if ((DateTime.Now - _lastGraphUpdate).TotalMilliseconds < GRAPH_UPDATE_INTERVAL_MS)
+                return;
+            
+            _lastGraphUpdate = DateTime.Now;
 
             // Add latest frametime to buffer (scrolling effect)
             double latestFt = frametimes.Last();
