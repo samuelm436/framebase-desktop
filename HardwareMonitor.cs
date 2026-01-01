@@ -13,11 +13,13 @@ namespace FramebaseApp
         private PerformanceCounter? _ramCounter;
         private List<PerformanceCounter> _gpuEngineCounters = new();
         private PerformanceCounter? _gpuMemoryCounter;
+        private string? _vramCounterInstance; // Store the instance name for re-init
         private ulong _vramTotalBytes = 0;
         private ulong _totalRamMB;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
         private DateTime _lastVramCheck = DateTime.MinValue;
+        private int _vramFailCount = 0; // Track consecutive failures
 
         public HardwareMonitor()
         {
@@ -94,8 +96,8 @@ namespace FramebaseApp
                 // VRAM Load - Task Manager uses Dedicated Usage / Physical VRAM
                 if (_vramTotalBytes > 0)
                 {
-                    // Re-initialize VRAM counter if needed (every 5 seconds check)
-                    if (_gpuMemoryCounter == null && (DateTime.Now - _lastVramCheck).TotalSeconds > 5)
+                    // Re-initialize VRAM counter if it failed or doesn't exist
+                    if (_gpuMemoryCounter == null && (DateTime.Now - _lastVramCheck).TotalSeconds > 2)
                     {
                         _lastVramCheck = DateTime.Now;
                         InitVramCounter();
@@ -106,22 +108,36 @@ namespace FramebaseApp
                         try
                         {
                             float vramUsedBytes = _gpuMemoryCounter.NextValue();
-                            if (vramUsedBytes >= 0 && vramUsedBytes <= _vramTotalBytes)
+                            
+                            // Validate the value is reasonable
+                            if (vramUsedBytes >= 0 && vramUsedBytes <= _vramTotalBytes * 1.1f) // Allow 10% overhead
                             {
                                 metrics.VramLoad = (vramUsedBytes / _vramTotalBytes) * 100f;
+                                _vramFailCount = 0; // Reset fail counter on success
                             }
-                            else if (vramUsedBytes < 0)
+                            else
                             {
-                                // Counter returned invalid value, re-init on next cycle
-                                _gpuMemoryCounter?.Dispose();
-                                _gpuMemoryCounter = null;
+                                // Invalid value, increment fail count
+                                _vramFailCount++;
+                                if (_vramFailCount > 3)
+                                {
+                                    // Too many failures, re-init counter
+                                    _gpuMemoryCounter?.Dispose();
+                                    _gpuMemoryCounter = null;
+                                    _vramFailCount = 0;
+                                }
                             }
                         }
                         catch
                         {
-                            // Counter failed, re-init on next cycle
-                            _gpuMemoryCounter?.Dispose();
-                            _gpuMemoryCounter = null;
+                            // Counter failed, increment fail count
+                            _vramFailCount++;
+                            if (_vramFailCount > 3)
+                            {
+                                _gpuMemoryCounter?.Dispose();
+                                _gpuMemoryCounter = null;
+                                _vramFailCount = 0;
+                            }
                         }
                     }
                 }
@@ -176,15 +192,29 @@ namespace FramebaseApp
                     var category = new PerformanceCounterCategory("GPU Adapter Memory");
                     var instanceNames = category.GetInstanceNames();
                     
-                    if (instanceNames.Length > 0)
+                    // Task Manager uses the first GPU instance, or stored instance if available
+                    string? targetInstance = _vramCounterInstance ?? instanceNames.FirstOrDefault();
+                    
+                    if (!string.IsNullOrEmpty(targetInstance) && instanceNames.Contains(targetInstance))
                     {
                         _gpuMemoryCounter?.Dispose();
-                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
-                        _gpuMemoryCounter.NextValue(); // Prime the counter
+                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", targetInstance, true);
+                        
+                        // Prime the counter (first read is often 0)
+                        _gpuMemoryCounter.NextValue();
+                        System.Threading.Thread.Sleep(100);
+                        _gpuMemoryCounter.NextValue();
+                        
+                        // Store the instance for future re-init
+                        _vramCounterInstance = targetInstance;
                     }
                 }
             }
-            catch { }
+            catch 
+            { 
+                _gpuMemoryCounter?.Dispose();
+                _gpuMemoryCounter = null;
+            }
         }
 
         private ulong GetVramTotalBytes()
