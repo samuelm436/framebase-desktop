@@ -102,11 +102,32 @@ namespace FramebaseApp
             {
                 return "Not paired: Missing device token";
             }
+            
+            // 🎯 Get PCI Device IDs for exact hardware identification
+            string? gpuPciId = null;
+            string? gpuVendorId = null;
+            try
+            {
+                gpuPciId = SystemInfoHelper.GetGpuPciId(); // Format: "10DE:2684"
+                gpuVendorId = SystemInfoHelper.GetGpuVendorId(); // Format: "10DE"
+                
+                File.AppendAllText(
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "upload_debug.log"),
+                    $"[{DateTime.Now:HH:mm:ss}] GPU PCI ID: {gpuPciId ?? "null"}, Vendor: {gpuVendorId ?? "null"}\n"
+                );
+            }
+            catch (Exception ex)
+            {
+                File.AppendAllText(
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "upload_debug.log"),
+                    $"[{DateTime.Now:HH:mm:ss}] PCI ID extraction failed: {ex.Message}\n"
+                );
+            }
 
             int sampleCount;
             lock (_lock) { sampleCount = _fpsBuffer.Count; }
 
-            // Simple payload matching API expectations
+            // Enhanced payload with PCI Device IDs for exact GPU matching
             var payload = new
             {
                 deviceToken = deviceToken,
@@ -114,6 +135,9 @@ namespace FramebaseApp
                 gpuId = string.IsNullOrEmpty(gpuId) ? "Unknown" : gpuId,
                 cpuName = string.IsNullOrEmpty(cpuName) ? "Unknown" : cpuName,
                 gpuName = string.IsNullOrEmpty(gpuName) ? "Unknown" : gpuName,
+                // 🆕 PCI Device ID für exakte GPU-Identifikation (z.B. "10DE:2684" für RTX 4090)
+                gpuDeviceId = gpuPciId,
+                gpuVendorId = gpuVendorId,
                 game = game,
                 setting = setting,
                 avgFps = avgFps,
