@@ -20,7 +20,6 @@ namespace framebase_app
         private bool _isGameActive = false;
         private Queue<double> _frametimeBuffer = new();
         private const int MAX_FRAMETIME_POINTS = 280; // Match canvas width for 1:1 pixel scrolling
-        private int _lastProcessedFrametimeIndex = 0; // Track which frametimes we've already added
         private DispatcherTimer? _graphRenderTimer;
         private List<double>? _latestFrametimes; // Store latest frametimes for rendering
 
@@ -198,17 +197,16 @@ namespace framebase_app
             // Store latest frametimes for rendering
             _latestFrametimes = frametimes;
 
-            // Add ALL new frametimes since last update (like Afterburner shows every frame)
-            for (int i = _lastProcessedFrametimeIndex; i < frametimes.Count; i++)
+            // Add all current frametimes to buffer (they scroll through over time)
+            // This creates the smooth Afterburner-style scrolling effect
+            foreach (var ft in frametimes)
             {
-                _frametimeBuffer.Enqueue(frametimes[i]);
+                _frametimeBuffer.Enqueue(ft);
                 
                 // Keep buffer size at canvas width for 1:1 pixel scrolling
                 while (_frametimeBuffer.Count > MAX_FRAMETIME_POINTS)
                     _frametimeBuffer.Dequeue();
             }
-            
-            _lastProcessedFrametimeIndex = frametimes.Count;
         }
 
         private void RenderGraph()
