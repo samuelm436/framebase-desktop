@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Management;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace FramebaseApp
 {
@@ -9,10 +10,10 @@ namespace FramebaseApp
     {
         private PerformanceCounter? _cpuCounter;
         private PerformanceCounter? _ramCounter;
-        private PerformanceCounter? _gpuEngineCounter;
+        private List<PerformanceCounter> _gpuEngineCounters = new();
         private PerformanceCounter? _gpuMemoryCounter;
+        private PerformanceCounter? _gpuMemoryTotalCounter;
         private ulong _totalRamMB;
-        private float _cachedVramTotal = -1;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
 
@@ -28,7 +29,6 @@ namespace FramebaseApp
                 _ramCounter.NextValue();
 
                 InitGpuCounters();
-                _cachedVramTotal = GetVramTotalGB();
             }
             catch (Exception ex)
             {
@@ -67,21 +67,41 @@ namespace FramebaseApp
                     metrics.RamLoad = (ramUsedMB / _totalRamMB) * 100f;
                 }
 
-                // GPU Load
-                if (_gpuEngineCounter != null)
+                // GPU Load - Average of all 3D engines (like Task Manager)
+                if (_gpuEngineCounters.Count > 0)
                 {
-                    try { metrics.GpuLoad = _gpuEngineCounter.NextValue(); }
+                    try 
+                    { 
+                        float total = 0;
+                        int validReadings = 0;
+                        foreach (var counter in _gpuEngineCounters)
+                        {
+                            try
+                            {
+                                float value = counter.NextValue();
+                                total += value;
+                                validReadings++;
+                            }
+                            catch { }
+                        }
+                        if (validReadings > 0)
+                            metrics.GpuLoad = total / validReadings;
+                    }
                     catch { }
                 }
 
-                // VRAM Load
-                if (_gpuMemoryCounter != null && _cachedVramTotal > 0)
+                // VRAM Load - Percentage based on Dedicated Usage / Total
+                if (_gpuMemoryCounter != null && _gpuMemoryTotalCounter != null)
                 {
                     try
                     {
                         float vramUsedBytes = _gpuMemoryCounter.NextValue();
-                        float vramUsedGB = vramUsedBytes / (1024f * 1024f * 1024f);
-                        metrics.VramLoad = (vramUsedGB / _cachedVramTotal) * 100f;
+                        float vramTotalBytes = _gpuMemoryTotalCounter.NextValue();
+                        
+                        if (vramTotalBytes > 0)
+                        {
+                            metrics.VramLoad = (vramUsedBytes / vramTotalBytes) * 100f;
+                        }
                     }
                     catch { }
                 }
@@ -99,38 +119,57 @@ namespace FramebaseApp
         {
             try
             {
-                // GPU Load - Aggregate all 3D engines
+                // GPU Load - Get ALL 3D engine instances and average them (same as Task Manager)
                 if (PerformanceCounterCategory.Exists("GPU Engine"))
                 {
                     var category = new PerformanceCounterCategory("GPU Engine");
                     var instanceNames = category.GetInstanceNames();
                     
-                    // Find all 3D engine instances for the primary GPU
+                    // Get all 3D engine instances (Task Manager averages all of them)
                     var gpu3dInstances = instanceNames
-                        .Where(name => name.Contains("engtype_3D") && name.Contains("pid_0"))
+                        .Where(name => name.Contains("engtype_3D"))
                         .ToList();
                     
-                    if (gpu3dInstances.Count > 0)
+                    Console.WriteLine($"Found {gpu3dInstances.Count} GPU 3D engines:");
+                    foreach (var instance in gpu3dInstances)
                     {
-                        // Use first 3D instance (usually sufficient)
-                        _gpuEngineCounter = new PerformanceCounter("GPU Engine", "Utilization Percentage", gpu3dInstances[0]);
-                        _gpuEngineCounter.NextValue();
-                        
-                        Console.WriteLine($"GPU Counter: {gpu3dInstances[0]}");
+                        try
+                        {
+                            var counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
+                            counter.NextValue(); // Initialize
+                            _gpuEngineCounters.Add(counter);
+                            Console.WriteLine($"  - {instance}");
+                        }
+                        catch { }
                     }
                 }
 
-                // VRAM Usage
+                // VRAM Usage - Get both Used and Total (same as Task Manager "Dedicated GPU Memory")
                 if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 {
                     var category = new PerformanceCounterCategory("GPU Adapter Memory");
                     var instanceNames = category.GetInstanceNames();
+                    
                     if (instanceNames.Length > 0)
                     {
-                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
+                        var instance = instanceNames[0];
+                        
+                        // Dedicated Usage (bytes in use)
+                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instance);
                         _gpuMemoryCounter.NextValue();
                         
-                        Console.WriteLine($"VRAM Counter: {instanceNames[0]}");
+                        // Total Committed (total available)
+                        try
+                        {
+                            _gpuMemoryTotalCounter = new PerformanceCounter("GPU Adapter Memory", "Total Committed", instance);
+                            _gpuMemoryTotalCounter.NextValue();
+                        }
+                        catch
+                        {
+                            // Fallback: try to use a fixed total or alternative counter
+                        }
+                        
+                        Console.WriteLine($"VRAM Counter: {instance}");
                     }
                 }
             }
@@ -153,28 +192,14 @@ namespace FramebaseApp
             catch { return 16384; }
         }
 
-        private float GetVramTotalGB()
-        {
-            try
-            {
-                using var searcher = new ManagementObjectSearcher("SELECT AdapterRAM FROM Win32_VideoController");
-                foreach (var obj in searcher.Get())
-                {
-                    var ram = Convert.ToUInt64(obj["AdapterRAM"]);
-                    if (ram > 0)
-                        return ram / (1024f * 1024f * 1024f);
-                }
-            }
-            catch { }
-            return -1;
-        }
-
         public void Dispose()
         {
             _cpuCounter?.Dispose();
             _ramCounter?.Dispose();
-            _gpuEngineCounter?.Dispose();
+            foreach (var counter in _gpuEngineCounters)
+                counter?.Dispose();
             _gpuMemoryCounter?.Dispose();
+            _gpuMemoryTotalCounter?.Dispose();
         }
     }
 }
