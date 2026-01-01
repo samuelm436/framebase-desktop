@@ -17,6 +17,8 @@ namespace framebase_app
         private Queue<(DateTime time, float gpu, float ram, float vram)> _loadHistory = new();
         private const int BOTTLENECK_CHECK_SECONDS = 5;
         private bool _isGameActive = false;
+        private Queue<double> _frametimeBuffer = new();
+        private const int MAX_FRAMETIME_POINTS = 280; // Match canvas width for 1:1 pixel scrolling
 
         public OverlayWindow()
         {
@@ -185,25 +187,32 @@ namespace framebase_app
             double height = FrametimeCanvas.ActualHeight;
             if (width <= 0 || height <= 0) return;
 
-            // Keep enough points to fill width smoothly (more points = smoother)
-            int maxPoints = (int)(width * 1.5); 
-            var points = frametimes.TakeLast(maxPoints).ToList();
+            // Add latest frametime to buffer (scrolling effect)
+            double latestFt = frametimes.Last();
+            _frametimeBuffer.Enqueue(latestFt);
             
-            if (points.Count == 0) return;
+            // Keep buffer size at canvas width for 1:1 pixel scrolling
+            while (_frametimeBuffer.Count > MAX_FRAMETIME_POINTS)
+                _frametimeBuffer.Dequeue();
+            
+            if (_frametimeBuffer.Count < 2) return;
+
+            // Update text value
+            FrametimeValue.Text = $"{Math.Round(latestFt, 1)} ms";
 
             // Dynamic scaling with headroom
-            double maxFt = points.Max();
+            double maxFt = _frametimeBuffer.Max();
             double targetMax = Math.Max(maxFt * 1.2, 16.6); // 20% headroom or at least 60fps line
-            
-            // Update text value
-            FrametimeValue.Text = $"{Math.Round(points.Last(), 1)} ms";
 
             var collection = new PointCollection();
+            var points = _frametimeBuffer.ToList();
             
-            // Smooth interpolation - distribute points evenly across width
+            // Draw points from left to right with 1:1 pixel mapping for smooth scrolling
+            double pixelStep = width / MAX_FRAMETIME_POINTS;
+            
             for (int i = 0; i < points.Count; i++)
             {
-                double x = (i / (double)(points.Count - 1)) * width;
+                double x = i * pixelStep;
                 double normalizedValue = Math.Min(points[i] / targetMax, 1.0);
                 double y = height - (normalizedValue * height);
                 collection.Add(new Point(x, y));
