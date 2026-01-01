@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using FramebaseApp;
 
 namespace framebase_app
 {
@@ -21,8 +22,9 @@ namespace framebase_app
                 string flag = GetFlagPath();
                 if (!File.Exists(flag)) return false;
 
-                // Check if device is paired (token exists)
-                if (!File.Exists("device_token.json")) return false;
+                // Check if device is paired (token exists - new encrypted or old json format)
+                bool hasToken = File.Exists(PairingService.TOKEN_FILE) || File.Exists(PairingService.TOKEN_FILE_LEGACY);
+                if (!hasToken) return false;
 
                 return true;
             }

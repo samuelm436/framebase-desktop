@@ -5,12 +5,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using framebase_app;
 
 namespace FramebaseApp
 {
     public class PairingService
     {
-        private const string TOKEN_FILE = "device_token.dat";
+        public const string TOKEN_FILE = "device_token.dat";
+        public const string TOKEN_FILE_LEGACY = "device_token.json";
         public string? DeviceToken { get; private set; }
         public string? ConnectedUserEmail { get; private set; }
 
@@ -275,6 +277,7 @@ namespace FramebaseApp
                 if (string.IsNullOrEmpty(DeviceToken))
                 {
                     DeleteAllTokenFiles();
+                    SetupState.Reset(); // Reset setup state to force setup on next start
                     return (true, "Local token file deleted (no active token found)");
                 }
 
@@ -288,6 +291,7 @@ namespace FramebaseApp
                     DeviceToken = null;
                     ConnectedUserEmail = null;
                     DeleteAllTokenFiles();
+                    SetupState.Reset(); // Reset setup state to force setup on next start
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -303,6 +307,7 @@ namespace FramebaseApp
                     DeviceToken = null;
                     ConnectedUserEmail = null;
                     DeleteAllTokenFiles();
+                    SetupState.Reset(); // Reset setup state to force setup on next start
                     return (true, $"Local connection cleared (Network error: {ex.Message})");
                 }
             }
@@ -317,7 +322,7 @@ namespace FramebaseApp
             try
             {
                 if (File.Exists(TOKEN_FILE)) File.Delete(TOKEN_FILE);
-                if (File.Exists("device_token.json")) File.Delete("device_token.json");
+                if (File.Exists(TOKEN_FILE_LEGACY)) File.Delete(TOKEN_FILE_LEGACY);
             }
             catch { }
         }

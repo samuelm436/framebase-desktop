@@ -800,8 +800,16 @@ namespace framebase_app
             try
             {
                 var (success, message) = await _pairingService.UnpairAsync();
-                // Unpair completed - no UI feedback needed
-                await RefreshAccountStatus();
+                // Unpair completed - restart app to show setup window
+                if (success)
+                {
+                    System.Diagnostics.Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
+                    Application.Current.Shutdown();
+                }
+                else
+                {
+                    await RefreshAccountStatus();
+                }
             }
             catch
             {
