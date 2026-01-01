@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Management;
 using System.Linq;
 using System.Collections.Generic;
+using Microsoft.Win32;
 
 namespace FramebaseApp
 {
@@ -12,7 +13,7 @@ namespace FramebaseApp
         private PerformanceCounter? _ramCounter;
         private List<PerformanceCounter> _gpuEngineCounters = new();
         private PerformanceCounter? _gpuMemoryCounter;
-        private float _vramTotalGB = -1;
+        private ulong _vramTotalBytes = 0;
         private ulong _totalRamMB;
         private DateTime _lastUpdate = DateTime.MinValue;
         private HardwareMetrics _cachedMetrics = new();
@@ -29,7 +30,7 @@ namespace FramebaseApp
                 _ramCounter.NextValue();
 
                 InitGpuCounters();
-                _vramTotalGB = GetVramTotalGB();
+                _vramTotalBytes = GetVramTotalBytes();
             }
             catch (Exception ex)
             {
@@ -89,22 +90,15 @@ namespace FramebaseApp
                     catch { }
                 }
 
-                // VRAM Load - Use Physical VRAM Total (like Task Manager)
-                if (_gpuMemoryCounter != null && _vramTotalGB > 0)
+                // VRAM Load - Task Manager uses Dedicated Usage / Physical VRAM
+                if (_gpuMemoryCounter != null && _vramTotalBytes > 0)
                 {
                     try
                     {
                         float vramUsedBytes = _gpuMemoryCounter.NextValue();
-                        float vramUsedGB = vramUsedBytes / (1024f * 1024f * 1024f);
-                        metrics.VramLoad = (vramUsedGB / _vramTotalGB) * 100f;
-                        
-                        // Debug output
-                        Console.WriteLine($"VRAM Used: {vramUsedGB:F2} GB / {_vramTotalGB:F2} GB = {metrics.VramLoad:F1}%");
+                        metrics.VramLoad = (vramUsedBytes / _vramTotalBytes) * 100f;
                     }
-                    catch (Exception ex) 
-                    { 
-                        Console.WriteLine($"VRAM Read Error: {ex.Message}");
-                    }
+                    catch { }
                 }
 
                 _cachedMetrics = metrics;
@@ -120,32 +114,29 @@ namespace FramebaseApp
         {
             try
             {
-                // GPU Load - Get ALL 3D engine instances and average them (same as Task Manager)
+                // GPU Load - Get ALL 3D engine instances (Task Manager uses max)
                 if (PerformanceCounterCategory.Exists("GPU Engine"))
                 {
                     var category = new PerformanceCounterCategory("GPU Engine");
                     var instanceNames = category.GetInstanceNames();
                     
-                    // Get all 3D engine instances (Task Manager averages all of them)
                     var gpu3dInstances = instanceNames
                         .Where(name => name.Contains("engtype_3D"))
                         .ToList();
                     
-                    Console.WriteLine($"Found {gpu3dInstances.Count} GPU 3D engines:");
                     foreach (var instance in gpu3dInstances)
                     {
                         try
                         {
                             var counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
-                            counter.NextValue(); // Initialize
+                            counter.NextValue();
                             _gpuEngineCounters.Add(counter);
-                            Console.WriteLine($"  - {instance}");
                         }
                         catch { }
                     }
                 }
 
-                // VRAM Usage - Only Dedicated Usage (Task Manager uses physical VRAM total from WMI)
+                // VRAM Usage - Dedicated Usage (same as Task Manager)
                 if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 {
                     var category = new PerformanceCounterCategory("GPU Adapter Memory");
@@ -153,24 +144,32 @@ namespace FramebaseApp
                     
                     if (instanceNames.Length > 0)
                     {
-                        var instance = instanceNames[0];
-                        
-                        // Dedicated Usage (bytes in use) - same as Task Manager
-                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instance);
+                        _gpuMemoryCounter = new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", instanceNames[0]);
                         _gpuMemoryCounter.NextValue();
-                        
-                        Console.WriteLine($"VRAM Counter: {instance}");
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"GPU Counter Init Error: {ex.Message}");
-            }
+            catch { }
         }
 
-        private float GetVramTotalGB()
+        private ulong GetVramTotalBytes()
         {
+            // Try Registry first (most accurate for modern GPUs)
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000");
+                if (key != null)
+                {
+                    var memSize = key.GetValue("HardwareInformation.qwMemorySize");
+                    if (memSize != null && memSize is long qwMem)
+                    {
+                        return (ulong)qwMem;
+                    }
+                }
+            }
+            catch { }
+
+            // Fallback to WMI
             try
             {
                 using var searcher = new ManagementObjectSearcher("SELECT AdapterRAM FROM Win32_VideoController");
@@ -178,15 +177,12 @@ namespace FramebaseApp
                 {
                     var ram = Convert.ToUInt64(obj["AdapterRAM"]);
                     if (ram > 0)
-                    {
-                        float totalGB = ram / (1024f * 1024f * 1024f);
-                        Console.WriteLine($"Physical VRAM Total: {totalGB:F2} GB");
-                        return totalGB;
-                    }
+                        return ram;
                 }
             }
             catch { }
-            return -1;
+
+            return 0;
         }
 
         private ulong GetTotalRamMB()
