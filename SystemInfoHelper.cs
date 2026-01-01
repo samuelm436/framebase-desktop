@@ -225,6 +225,23 @@ namespace FramebaseApp
             catch { return "0000"; }
         }
 
+        // Get complete PCI Device ID in format "VendorID:DeviceID" (e.g., "10DE:2684" for RTX 4090)
+        public static string GetGpuPciId()
+        {
+            try
+            {
+                string vendorId = GetGpuVendorId();
+                string deviceId = GetGpuDeviceId();
+                
+                if (vendorId != "0000" && deviceId != "0000")
+                {
+                    return $"{vendorId}:{deviceId}";
+                }
+                return null;
+            }
+            catch { return null; }
+        }
+
         // Get detailed GPU specifications
         public static GpuSpecs GetGpuSpecs()
         {
@@ -409,6 +426,7 @@ namespace FramebaseApp
             sb.AppendLine($"CPU-Device: {GetCpuDeviceId()}");
             sb.AppendLine($"GPU: {GetGpu()}");
             sb.AppendLine($"GPU-ID: {GetGpuId()}");
+            sb.AppendLine($"GPU-PCI-ID: {GetGpuPciId()}");
             sb.AppendLine($"GPU-Vendor: {GetGpuVendorId()}");
             sb.AppendLine($"GPU-Device: {GetGpuDeviceId()}");
             sb.AppendLine($"RAM: {GetRam()}");
