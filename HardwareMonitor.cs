@@ -67,25 +67,23 @@ namespace FramebaseApp
                     metrics.RamLoad = (ramUsedMB / _totalRamMB) * 100f;
                 }
 
-                // GPU Load - Average of all 3D engines (like Task Manager)
+                // GPU Load - Max of all 3D engines (like Task Manager shows highest utilization)
                 if (_gpuEngineCounters.Count > 0)
                 {
                     try 
                     { 
-                        float total = 0;
-                        int validReadings = 0;
+                        float maxLoad = 0;
                         foreach (var counter in _gpuEngineCounters)
                         {
                             try
                             {
                                 float value = counter.NextValue();
-                                total += value;
-                                validReadings++;
+                                if (value > maxLoad)
+                                    maxLoad = value;
                             }
                             catch { }
                         }
-                        if (validReadings > 0)
-                            metrics.GpuLoad = total / validReadings;
+                        metrics.GpuLoad = maxLoad;
                     }
                     catch { }
                 }
