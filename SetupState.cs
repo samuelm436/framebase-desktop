@@ -18,13 +18,9 @@ namespace framebase_app
         {
             try
             {
-                // Check if device is paired (token exists - new encrypted or old json format)
-                // Check in both current directory and exe directory
-                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-                bool hasToken = File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE)) || 
-                               File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE_LEGACY)) ||
-                               File.Exists(PairingService.TOKEN_FILE) || 
-                               File.Exists(PairingService.TOKEN_FILE_LEGACY);
+                // Check if device has a valid token using PairingService
+                var pairingService = new PairingService();
+                bool hasToken = !string.IsNullOrEmpty(pairingService.DeviceToken);
                 
                 // If no token, setup is not complete regardless of flag
                 if (!hasToken) return false;

@@ -95,9 +95,7 @@
                             <Border Grid.Column="4" CornerRadius="8" Padding="12" Background="#22343A" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="Last Measurement" Foreground="{StaticResource Brush.TextMuted}" FontSize="10" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="LastSessionSummary" Text="—" Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,2,0,0" Cursor="Help"
-                                               ToolTipService.ShowDuration="10000"
-                                               ToolTipService.InitialShowDelay="300"/>
+                                    <TextBlock x:Name="LastSessionSummary" Text="—" Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,2,0,0" Cursor="Help"/>
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -247,7 +245,7 @@
 
         <!-- Account Overlay -->
         <Grid x:Name="AccountOverlay" Visibility="Collapsed" Background="#80000000">
-            <Border Width="500" Height="420" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" CornerRadius="12" Padding="20">
+            <Border Width="400" Height="380" Background="{StaticResource Brush.Surface}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" CornerRadius="12" Padding="20">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -261,25 +259,24 @@
                         </StackPanel>
                     </DockPanel>
                     <StackPanel Grid.Row="1" VerticalAlignment="Top">
-                        <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,12">
+                        <Border Style="{StaticResource Card}" Padding="20" Margin="0,0,0,20">
                             <StackPanel HorizontalAlignment="Center">
-                                <TextBlock Text="👤" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                                <TextBlock x:Name="AccountStatusText" Text="Not connected" FontSize="16" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="AccountEmailText" Text="" FontSize="14" Foreground="{StaticResource Brush.TextMuted}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="👤" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                                <TextBlock x:Name="AccountUsernameText" Text="" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <TextBlock x:Name="AccountEmailText" Text="" FontSize="13" Foreground="{StaticResource Brush.TextMuted}" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
                         <!-- Not connected: show reconnect option -->
                         <StackPanel x:Name="NotConnectedPanel" Orientation="Vertical" Margin="0,0,0,12" HorizontalAlignment="Center">
-                            <TextBlock Text="This device is not connected to your account" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,8" TextAlignment="Center"/>
-                            <Button x:Name="ReconnectButton" Content="Connect Device" Style="{StaticResource PrimaryButton}" Margin="0,8,0,0" Width="160" HorizontalAlignment="Center"/>
+                            <TextBlock Text="This device is not connected to your account" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,12" TextAlignment="Center"/>
+                            <Button x:Name="ReconnectButton" Content="Connect Device" Style="{StaticResource PrimaryButton}" Width="180" HorizontalAlignment="Center"/>
                         </StackPanel>
 
-                        <!-- Connected: show unpair button -->
-                        <StackPanel x:Name="ConnectedPanel" Orientation="Horizontal" HorizontalAlignment="Center" Visibility="Collapsed">
-                            <Button x:Name="UnpairButton" Content="Disconnect" Style="{StaticResource SecondaryButton}" Width="160"/>
-                            <Button x:Name="RefreshAccountButton" Content="Refresh" Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Width="140"/>
-                            <Button x:Name="ResetSetupButton" Content="Reset Setup" Style="{StaticResource DangerButton}" Margin="8,0,0,0" Width="140"/>
+                        <!-- Connected: show disconnect and my stats buttons -->
+                        <StackPanel x:Name="ConnectedPanel" Orientation="Vertical" HorizontalAlignment="Center" Visibility="Collapsed">
+                            <Button x:Name="MyStatsButton" Content="My Stats" Style="{StaticResource PrimaryButton}" Width="180" Margin="0,0,0,8"/>
+                            <Button x:Name="UnpairButton" Content="Disconnect" Style="{StaticResource DangerButton}" Width="180"/>
                         </StackPanel>
                     </StackPanel>
                 </Grid>

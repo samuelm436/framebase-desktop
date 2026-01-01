@@ -89,14 +89,12 @@ namespace FramebaseApp
             if (!presetDict.TryGetValue(status.MatchedPresetName, out var clientPreset))
                 return "Preset not found";
 
-            // Read device token
+            // Get device token from PairingService
             string? deviceToken = null;
             try
             {
-                if (File.Exists("device_token.json"))
-                {
-                    deviceToken = File.ReadAllText("device_token.json").Trim();
-                }
+                var pairingService = new PairingService();
+                deviceToken = pairingService.DeviceToken;
             }
             catch { }
 

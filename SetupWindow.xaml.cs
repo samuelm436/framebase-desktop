@@ -55,7 +55,7 @@ namespace framebase_app
             if (!string.IsNullOrEmpty(_pairing.DeviceToken))
             {
                 _isPaired = true;
-                var (success, email, _) = await _pairing.GetConnectedUserInfoAsync();
+                var (success, email, username, _) = await _pairing.GetConnectedUserInfoAsync();
                 if (success)
                 {
                     PairingInputPanel.Visibility = Visibility.Collapsed;

@@ -135,26 +135,8 @@ namespace framebase_app
             // Account control buttons
             if (FindName("UnpairButton") is Button unpairBtn)
                 unpairBtn.Click += async (_, __) => await UnpairButton_Click();
-            if (FindName("RefreshAccountButton") is Button refreshBtn)
-                refreshBtn.Click += async (_, __) => await RefreshAccountButton_Click();
-            if (FindName("ResetSetupButton") is Button resetBtn)
-                resetBtn.Click += ResetBtn_Click;
-            
-            // Connection test button
-            if (FindName("CloseAccountOverlayButton") is Button closeAccountBtn2)
-            {
-                // no-op here
-            }
-            // Add test connection button if exists
-            var testBtn = new Button();
-            if (FindName("AccountStatusText") is TextBlock accountStatus)
-            {
-                var btn = new Button { Content = "Test Connection", Style = (Style)FindResource("PrimaryButton"), Margin = new Thickness(0,8,0,0), Width = 160 };
-                btn.Click += async (_, __) => await TestConnectionAsync();
-                // find parent and insert after AccountStatusText
-                var parent = accountStatus.Parent as Panel;
-                parent?.Children.Add(btn);
-            }
+            if (FindName("MyStatsButton") is Button myStatsBtn)
+                myStatsBtn.Click += MyStatsButton_Click;
 
             // Coordinator setup (handles PresentMon, activity, upload, session counter)
             _coordinator = new UploadCoordinator();
@@ -208,33 +190,7 @@ namespace framebase_app
                             ? $"{Math.Round(avgFps, 1)} FPS | 1%: {Math.Round(low1, 1)}" 
                             : "Upload failed";
                         summary.Foreground = ok ? (Brush)FindResource("Brush.SuccessText") : Brushes.Red;
-                        
-                        // Set tooltip to show error details on failure
-                        if (!ok && !string.IsNullOrEmpty(msg))
-                        {
-                            var tooltipTextBlock = new TextBlock
-                            {
-                                Text = msg,
-                                Foreground = Brushes.White,
-                                TextWrapping = TextWrapping.Wrap,
-                                MaxWidth = 400
-                            };
-                            
-                            var tooltip = new System.Windows.Controls.ToolTip
-                            {
-                                Content = tooltipTextBlock,
-                                Background = new SolidColorBrush(Color.FromRgb(40, 40, 40)),
-                                BorderBrush = new SolidColorBrush(Color.FromRgb(220, 53, 69)),
-                                BorderThickness = new Thickness(1),
-                                Padding = new Thickness(8),
-                                HasDropShadow = true
-                            };
-                            summary.ToolTip = tooltip;
-                        }
-                        else
-                        {
-                            summary.ToolTip = null;
-                        }
+                        summary.ToolTip = ok ? null : msg;
                     }
                 });
             };
@@ -819,21 +775,103 @@ namespace framebase_app
             }
         }
 
+        private async Task RefreshAccountStatus()
+        {
+            try
+            {
+                var info = await _pairingService.GetConnectedUserInfoAsync();
+
+                // Update UI via Dispatcher
+                Dispatcher.Invoke(() =>
+                {
+                    if (FindName("AccountUsernameText") is TextBlock usernameText && FindName("AccountEmailText") is TextBlock emailText)
+                    {
+                        if (info.Success)
+                        {
+                            // Use the username from the database
+                            usernameText.Text = string.IsNullOrEmpty(info.Username) ? "User" : info.Username;
+                            emailText.Text = info.Email;
+
+                            // show connected panel
+                            if (FindName("ConnectedPanel") is StackPanel connected)
+                                connected.Visibility = Visibility.Visible;
+                            if (FindName("NotConnectedPanel") is StackPanel notConnected)
+                                notConnected.Visibility = Visibility.Collapsed;
+                        }
+                        else
+                        {
+                            usernameText.Text = "Not connected";
+                            emailText.Text = "";
+
+                            // show not connected panel
+                            if (FindName("ConnectedPanel") is StackPanel connected)
+                                connected.Visibility = Visibility.Collapsed;
+                            if (FindName("NotConnectedPanel") is StackPanel notConnected)
+                                notConnected.Visibility = Visibility.Visible;
+                        }
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    if (FindName("AccountUsernameText") is TextBlock usernameText)
+                    {
+                        usernameText.Text = "Error";
+                    }
+
+                    if (FindName("AccountEmailText") is TextBlock emailText)
+                    {
+                        emailText.Text = $"Error: {ex.Message}";
+                    }
+                });
+            }
+        }
+
+        private void MyStatsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://framebase.gg/?view=stats",
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                // Error opening browser - no feedback needed
+            }
+        }
+
         private async Task UnpairButton_Click()
         {
             try
             {
-                var (success, message) = await _pairingService.UnpairAsync();
-                // Unpair completed - restart app to show setup window
-                if (success)
+                if (FindName("AccountUsernameText") is TextBlock usernameText &&
+                    FindName("AccountEmailText") is TextBlock emailText)
                 {
-                    System.Diagnostics.Process.Start(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
-                    Application.Current.Shutdown();
+                    usernameText.Text = "Not connected";
+                    emailText.Text = "";
                 }
-                else
+
+                // show not connected panel
+                if (FindName("ConnectedPanel") is StackPanel connected)
+                    connected.Visibility = Visibility.Collapsed;
+                if (FindName("NotConnectedPanel") is StackPanel notConnected)
+                    notConnected.Visibility = Visibility.Visible;
+
+                // unpair via service (deletes token, resets setup)
+                await _pairingService.UnpairAsync();
+
+                // Close current window and reopen setup
+                Application.Current.Dispatcher.Invoke(() =>
                 {
-                    await RefreshAccountStatus();
-                }
+                    var setup = new SetupWindow();
+                    setup.Show();
+                    this.Close();
+                });
             }
             catch
             {
@@ -850,103 +888,6 @@ namespace framebase_app
             catch
             {
                 // Refresh error - no UI feedback needed
-            }
-        }
-
-        private async Task RefreshAccountStatus()
-        {
-            try
-            {
-                var info = await _pairingService.GetConnectedUserInfoAsync();
-
-                // Update UI via Dispatcher
-                Dispatcher.Invoke(() =>
-                {
-                    if (FindName("AccountStatusText") is TextBlock statusText && FindName("AccountEmailText") is TextBlock emailText)
-                    {
-                        if (info.Success)
-                        {
-                            statusText.Text = "Connected";
-                            statusText.Foreground = (Brush)FindResource("Brush.SuccessText");
-                            emailText.Text = info.Email;
-                            emailText.Foreground = (Brush)FindResource("Brush.Text");
-
-                            // show connected panel
-                            if (FindName("ConnectedPanel") is StackPanel connected)
-                                connected.Visibility = Visibility.Visible;
-                            if (FindName("NotConnectedPanel") is StackPanel notConnected)
-                                notConnected.Visibility = Visibility.Collapsed;
-                        }
-                        else
-                        {
-                            statusText.Text = "Not connected";
-                            statusText.Foreground = (Brush)FindResource("Brush.WarningText");
-                            emailText.Text = info.Message;
-                            emailText.Foreground = (Brush)FindResource("Brush.TextMuted");
-
-                            // show not connected panel
-                            if (FindName("ConnectedPanel") is StackPanel connected)
-                                connected.Visibility = Visibility.Collapsed;
-                            if (FindName("NotConnectedPanel") is StackPanel notConnected)
-                                notConnected.Visibility = Visibility.Visible;
-                        }
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                if (FindName("AccountStatusText") is TextBlock statusText)
-                {
-                    statusText.Text = "Error";
-                    statusText.Foreground = (Brush)FindResource("Brush.ErrorText");
-                }
-
-                if (FindName("AccountEmailText") is TextBlock emailText)
-                {
-                    emailText.Text = $"Error: {ex.Message}";
-                    emailText.Foreground = (Brush)FindResource("Brush.ErrorText");
-                }
-            }
-        }
-
-        private async Task TestConnectionAsync()
-        {
-            try
-            {
-                using var client = new System.Net.Http.HttpClient();
-                var token = _pairingService.DeviceToken;
-                if (!string.IsNullOrEmpty(token)) 
-                {
-                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                }
-
-                // Simple test: Try to load user-info (simple API call without preset validation)
-                var resp = await client.GetAsync("https://framebase.gg/api/user-info");
-
-                if (resp.IsSuccessStatusCode)
-                {
-                    if (FindName("AccountStatusText") is TextBlock status)
-                    {
-                        status.Text = "Server reachable (Test successful)";
-                        status.Foreground = (Brush)FindResource("Brush.SuccessText");
-                    }
-                }
-                else
-                {
-                    if (FindName("AccountStatusText") is TextBlock status)
-                    {
-                        status.Text = $"Test failed: {resp.StatusCode}";
-                        status.Foreground = (Brush)FindResource("Brush.ErrorText");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (FindName("AccountStatusText") is TextBlock status)
-                {
-                    status.Text = $"Test error: {ex.Message}";
-                    status.Foreground = (Brush)FindResource("Brush.ErrorText");
-                }
             }
         }
 
@@ -977,33 +918,6 @@ namespace framebase_app
         private async void RefreshAccount_Click(object? sender, RoutedEventArgs e)
         {
             await RefreshAccountStatus();
-        }
-
-        private void ResetBtn_Click(object? sender, RoutedEventArgs e)
-        {
-            // Show confirmation dialog
-            var result = MessageBox.Show(
-                "Möchtest du das Setup wirklich zurücksetzen? Das startet den Setup-Assistenten neu und alle Einstellungen gehen verloren.", 
-                "Setup zurücksetzen", 
-                MessageBoxButton.YesNo, 
-                MessageBoxImage.Question);
-            
-            if (result != MessageBoxResult.Yes)
-                return;
-                
-            try
-            {
-                SetupState.Reset();
-                // Close this window and re-open setup
-                _isResettingSetup = true;  // Prevents minimize to tray
-                var setup = new SetupWindow();
-                setup.Show();
-                this.Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error resetting: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
         }
 
         #region System Tray Implementation
@@ -1117,12 +1031,16 @@ namespace framebase_app
 
         private bool IsDeviceConnected()
         {
-            // Check if any token file exists
-            string exeDir = AppDomain.CurrentDomain.BaseDirectory;
-            return File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE)) || 
-                   File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE_LEGACY)) ||
-                   File.Exists(PairingService.TOKEN_FILE) || 
-                   File.Exists(PairingService.TOKEN_FILE_LEGACY);
+            // Check if device has a valid token
+            try
+            {
+                var pairingService = new PairingService();
+                return !string.IsNullOrEmpty(pairingService.DeviceToken);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         #endregion
