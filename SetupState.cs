@@ -18,15 +18,20 @@ namespace framebase_app
         {
             try
             {
-                // Check if setup flag exists
-                string flag = GetFlagPath();
-                if (!File.Exists(flag)) return false;
-
                 // Check if device is paired (token exists - new encrypted or old json format)
-                bool hasToken = File.Exists(PairingService.TOKEN_FILE) || File.Exists(PairingService.TOKEN_FILE_LEGACY);
+                // Check in both current directory and exe directory
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                bool hasToken = File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE)) || 
+                               File.Exists(Path.Combine(exeDir, PairingService.TOKEN_FILE_LEGACY)) ||
+                               File.Exists(PairingService.TOKEN_FILE) || 
+                               File.Exists(PairingService.TOKEN_FILE_LEGACY);
+                
+                // If no token, setup is not complete regardless of flag
                 if (!hasToken) return false;
 
-                return true;
+                // Check if setup flag exists
+                string flag = GetFlagPath();
+                return File.Exists(flag);
             }
             catch
             {
