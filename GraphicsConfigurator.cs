@@ -93,12 +93,17 @@ namespace FramebaseApp
         {
             var result = new PresetCheckResult();
             string gameKey = game.ToLower();
-            // Normalize to preset key names
+            // Normalize to preset key names (Full Names)
             string presetKey = gameKey switch
             {
-                "counter-strike 2" => "cs2",
-                "cp2077" => "cp2077",
-                "cyberpunk 2077" => "cp2077",
+                "cs2" => "Counter-Strike 2",
+                "counter-strike 2" => "Counter-Strike 2",
+                "cp2077" => "Cyberpunk 2077",
+                "cyberpunk 2077" => "Cyberpunk 2077",
+                "fortnite" => "Fortnite",
+                "forzahorizon5" => "Forza Horizon 5",
+                "forza horizon 5" => "Forza Horizon 5",
+                "valorant" => "Valorant",
                 _ => gameKey
             };
             string configPath = string.Empty;
@@ -106,9 +111,9 @@ namespace FramebaseApp
             string? gameUserSettingsPath = string.Empty;
             
             // Debug logging
-            System.Diagnostics.Debug.WriteLine($"[DEBUG] CheckPresetStatusAsync für {game} ({gameKey}) mit configContent: {configContent?.Length ?? 0} Zeichen");
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] CheckPresetStatusAsync für {game} ({gameKey}) -> {presetKey} mit configContent: {configContent?.Length ?? 0} Zeichen");
             
-            if (gameKey == "valorant")
+            if (presetKey == "Valorant")
             {
                 // Nutze die robuste Methode für Valorant-Config
                 (riotUserSettingsPath, gameUserSettingsPath) = GetValorantGameUserSettingsPath();
@@ -127,41 +132,41 @@ namespace FramebaseApp
             {
                 configPath = presetKey switch
                 {
-                    "cs2" => GetCS2VideoConfigPath(),
-                    "fortnite" => GetFortniteConfigPath(),
-                    "forza horizon 5" => GetForzaHorizon5ConfigPath(),
-                    "cp2077" => GetCp2077ConfigPath(),
+                    "Counter-Strike 2" => GetCS2VideoConfigPath(),
+                    "Fortnite" => GetFortniteConfigPath(),
+                    "Forza Horizon 5" => GetForzaHorizon5ConfigPath(),
+                    "Cyberpunk 2077" => GetCp2077ConfigPath(),
                     _ => string.Empty
                 };
                 result.ConfigPath = configPath;
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Config Path: {configPath}");
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Config exists: {System.IO.File.Exists(configPath)}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} Config Path: {configPath}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} Config exists: {System.IO.File.Exists(configPath)}");
                 if (string.IsNullOrEmpty(configPath) || !System.IO.File.Exists(configPath))
                 {
                     result.ConfigFound = false;
                     result.Message = "Configuration file not found. Please make sure the game has been started at least once.";
-                    System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Config not found or empty");
+                    System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} Config not found or empty");
                     return result;
                 }
             }
 
             // Load local presets (from \\presets next to EXE)
             var presetDict = await DownloadPresetConfigAsync(presetKey);
-            System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Presets loaded: {presetDict?.Count ?? 0} entries");
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} Presets loaded: {presetDict?.Count ?? 0} entries");
             if (presetDict != null && presetDict.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} Available Presets: {string.Join(", ", presetDict.Keys)}");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} Available Presets: {string.Join(", ", presetDict.Keys)}");
             }
             if (presetDict == null || presetDict.Count == 0)
             {
                 result.ConfigFound = true;
                 result.Message = $"❌ No presets found for '{game}' (expecting 'presets' folder next to EXE)";
-                System.Diagnostics.Debug.WriteLine($"[DEBUG] {gameKey} No presets found");
+                System.Diagnostics.Debug.WriteLine($"[DEBUG] {presetKey} No presets found");
                 return result;
             }
 
             // --- Cyberpunk 2077 Special Case ---
-            if (gameKey == "cp2077" || gameKey == "cyberpunk 2077")
+            if (presetKey == "Cyberpunk 2077")
             {
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] Cyberpunk 2077 preset check started");
                 result.ConfigFound = true;
@@ -385,7 +390,7 @@ namespace FramebaseApp
             result.AvailablePresets = presetDict.Keys.ToList();
 
             // Prüfe alle Presets, welches aktuell angewendet ist
-            if (gameKey == "valorant")
+            if (presetKey == "Valorant")
             {
                 System.Diagnostics.Debug.WriteLine($"[DEBUG] Valorant Preset-Prüfung gestartet");
                 result.ConfigFound = true;
@@ -456,7 +461,7 @@ namespace FramebaseApp
                 
                 // Helper: parse CS2 config into dictionary using strict regex
                 Dictionary<string, string>? cs2Dict = null;
-                if (presetKey == "cs2")
+                if (presetKey == "Counter-Strike 2")
                 {
                     cs2Dict = new Dictionary<string, string>(StringComparer.Ordinal);
                     var rx = new System.Text.RegularExpressions.Regex(@"^\s*""(?<key>[^""]+)""\s*""(?<val>[^""]*)""", System.Text.RegularExpressions.RegexOptions.Compiled);
@@ -480,17 +485,17 @@ namespace FramebaseApp
                         string? value = null;
                         switch (presetKey)
                         {
-                            case "cs2":
+                            case "Counter-Strike 2":
                                 cs2Dict?.TryGetValue(kv.Key, out value);
                                 break;
-                            case "fortnite":
+                            case "Fortnite":
                                 var fortniteLine = lines.FirstOrDefault(l => l.StartsWith(kv.Key + "="));
                                 if (fortniteLine != null)
                                 {
                                     value = fortniteLine.Split('=')[1];
                                 }
                                 break;
-                            case "forza horizon 5":
+                            case "Forza Horizon 5":
                                 // FH5 uses XML format: <option id="VSync" value="0" />
                                 var fh5Line = lines.FirstOrDefault(l => l.Contains($"id=\"{kv.Key}\""));
                                 if (fh5Line != null)
@@ -1074,12 +1079,26 @@ namespace FramebaseApp
         {
             try
             {
-                gameKey = gameKey.ToLowerInvariant();
-                var presets = DownloadPresetConfigAsync(gameKey).Result;
+                // Normalize game key to handle both short and full names
+                string originalKey = gameKey.ToLowerInvariant();
+                string normalizedKey = originalKey switch
+                {
+                    "cs2" => "cs2",
+                    "counter-strike 2" => "cs2",
+                    "cp2077" => "cp2077",
+                    "cyberpunk 2077" => "cp2077",
+                    "fortnite" => "fortnite",
+                    "forzahorizon5" => "forza horizon 5",
+                    "forza horizon 5" => "forza horizon 5",
+                    "valorant" => "valorant",
+                    _ => originalKey
+                };
+                
+                var presets = DownloadPresetConfigAsync(originalKey).Result;
                 if (!presets.TryGetValue(presetName, out var preset))
                     return false;
 
-                if (gameKey == "valorant")
+                if (normalizedKey == "valorant")
                 {
                     var (riotUserSettingsPath, gameUserSettingsPath) = GetValorantGameUserSettingsPath();
                     if (string.IsNullOrEmpty(riotUserSettingsPath) || string.IsNullOrEmpty(gameUserSettingsPath))
@@ -1112,7 +1131,7 @@ namespace FramebaseApp
                     }
                     return true;
                 }
-                else if (gameKey == "cp2077" || gameKey == "cyberpunk 2077")
+                else if (normalizedKey == "cp2077")
                 {
                     string configPath = GetCp2077ConfigPath();
                     if (string.IsNullOrEmpty(configPath) || !System.IO.File.Exists(configPath))
@@ -1165,7 +1184,7 @@ namespace FramebaseApp
                 }
                 else
                 {
-                    string configPath = gameKey switch
+                    string configPath = normalizedKey switch
                     {
                         "cs2" => GetCS2VideoConfigPath(),
                         "fortnite" => GetFortniteConfigPath(),
@@ -1196,12 +1215,12 @@ namespace FramebaseApp
                         return dict;
                     }
 
-                    var cs2Dict = gameKey == "cs2" ? ParseCs2() : null;
+                    var cs2Dict = normalizedKey == "cs2" ? ParseCs2() : null;
 
                     foreach (var kv in preset)
                     {
                         string? value = null;
-                        switch (gameKey)
+                        switch (normalizedKey)
                         {
                             case "cs2":
                                 cs2Dict?.TryGetValue(kv.Key, out value);

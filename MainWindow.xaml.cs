@@ -11,6 +11,7 @@ namespace framebase_app
         public MainWindow()
         {
             InitializeComponent();
+            
             _coordinator = new UploadCoordinator();
             _coordinator.LiveMetrics += (fps, frametime, low1, state) =>
             {

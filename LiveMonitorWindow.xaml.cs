@@ -625,7 +625,7 @@ namespace framebase_app
             var displayNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 { "cs2", "Counter-Strike 2" },
-                { "valorant", "VALORANT" },
+                { "valorant", "Valorant" },
                 { "cyberpunk", "Cyberpunk 2077" },
                 { "fh5", "Forza Horizon 5" },
                 { "fortnite", "Fortnite" }

@@ -17,6 +17,14 @@ namespace FramebaseApp
         public string VideoProcessor { get; set; } = "";
         public string DriverVersion { get; set; } = "";
         public int RefreshRate { get; set; }
+        
+        // GPU-Z specific data
+        public string SubVendor { get; set; } = "";
+        public int CurrentGpuClockMHz { get; set; }
+        public int CurrentMemoryClockMHz { get; set; }
+        public float GpuTempC { get; set; }
+        public int GpuLoadPercent { get; set; }
+        public int ShaderCount { get; set; }
     }
 
     // CPU Specifications class
@@ -148,20 +156,79 @@ namespace FramebaseApp
         {
             try
             {
-                var searcher = new ManagementObjectSearcher("select PNPDeviceID, Name, DeviceID from Win32_VideoController");
-                foreach (var o in searcher.Get())
-                {
-                    string pnpDeviceId = o["PNPDeviceID"]?.ToString() ?? "";
-                    string name = o["Name"]?.ToString() ?? "";
-                    string deviceId = o["DeviceID"]?.ToString() ?? "";
-                    
-                    // Kombiniere alle verfügbaren Hardware-IDs für eindeutige Identifikation
-                    string combined = $"{pnpDeviceId}|{deviceId}|{name}";
-                    return GenerateStableHash(combined);
-                }
-                return GenerateStableHash("unknown-gpu");
+                string gpuName = GetGpu();
+                int vramMB = GetGpuSpecs()?.VramMB ?? 0;
+                
+                // Generate name-based ID matching TypeScript format
+                return GenerateGpuId(gpuName, vramMB);
             }
-            catch { return GenerateStableHash("unknown-gpu"); }
+            catch { return "unknown-gpu"; }
+        }
+        
+        /// <summary>
+        /// Generates a name-based GPU ID matching the format from hardwareIdGenerator.ts
+        /// Examples: "rtx4090-24g", "rx580-8g", "b580-12g"
+        /// </summary>
+        private static string GenerateGpuId(string gpuName, int vramMB)
+        {
+            if (string.IsNullOrEmpty(gpuName)) return "unknown-gpu";
+            
+            string normalized = gpuName.ToLower()
+                .Replace("®", "")
+                .Replace("™", "")
+                .Trim();
+            
+            string modelId = "";
+            
+            // NVIDIA RTX/GTX: "NVIDIA GeForce RTX 4090" -> "rtx4090"
+            var match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"(?:nvidia\s+)?(?:geforce\s+)?(rtx|gtx)[\s\-]*([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                modelId = $"{match.Groups[1].Value}{match.Groups[2].Value}".ToLower().Replace(" ", "");
+            }
+            
+            // AMD Radeon RX: "AMD Radeon RX 7900 XTX" -> "rx7900xtx"
+            if (string.IsNullOrEmpty(modelId))
+            {
+                match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                    @"(?:amd\s+)?(?:radeon\s+)?rx[\s\-]*([\w\d]+)\s*(xt|xtx)?", 
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    string suffix = match.Groups[2].Success ? match.Groups[2].Value : "";
+                    modelId = $"rx{match.Groups[1].Value}{suffix}".ToLower().Replace(" ", "");
+                }
+            }
+            
+            // Intel Arc: "Intel Arc B580" -> "b580"
+            if (string.IsNullOrEmpty(modelId))
+            {
+                match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                    @"(?:intel\s+)?arc\s+([a-z]\d+)", 
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    modelId = match.Groups[1].Value.ToLower();
+                }
+            }
+            
+            // Fallback: sanitize name
+            if (string.IsNullOrEmpty(modelId))
+            {
+                modelId = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-z0-9]", "");
+                if (modelId.Length > 30) modelId = modelId.Substring(0, 30);
+            }
+            
+            // Append VRAM if available
+            if (vramMB > 0)
+            {
+                int vramGB = (int)Math.Round(vramMB / 1024.0);
+                return $"{modelId}-{vramGB}g";
+            }
+            
+            return modelId;
         }
 
         public static string GetGpuVendorId()
@@ -229,6 +296,8 @@ namespace FramebaseApp
             try
             {
                 var specs = new GpuSpecs();
+                
+                // Fallback: WMI
                 var searcher = new ManagementObjectSearcher("select * from Win32_VideoController");
                 
                 foreach (var o in searcher.Get())
@@ -382,72 +451,90 @@ namespace FramebaseApp
             catch { return "UNKNOWN"; }
         }
 
-        // Get CPUID in format "VendorString:Family-Model-Stepping" (e.g., "GenuineIntel:06-B7-09")
+        // Get CPU ID in name-based format (e.g., "r5-2600", "i7-14700kf", "c5-245k")
         public static string GetCpuId()
         {
             try
             {
-                var searcher = new ManagementObjectSearcher("select * from Win32_Processor");
-                foreach (var o in searcher.Get())
-                {
-                    // Get vendor string (GenuineIntel or AuthenticAMD)
-                    string manufacturer = o["Manufacturer"]?.ToString()?.ToLower() ?? "";
-                    string vendorString = "";
-                    
-                    if (manufacturer.Contains("intel"))
-                        vendorString = "GenuineIntel";
-                    else if (manufacturer.Contains("amd") || manufacturer.Contains("advanced micro devices"))
-                        vendorString = "AuthenticAMD";
-                    else
-                        return GenerateStableHash($"{o["ProcessorId"]}|{o["Name"]}"); // Fallback to hash for unknown vendors
-                    
-                    // Parse ProcessorId to extract Family, Model, Stepping
-                    // ProcessorId format varies, but typically contains these values
-                    string processorId = o["ProcessorId"]?.ToString() ?? "";
-                    
-                    // Try to extract from ProcessorId (usually in hex format)
-                    // Example: BFEBFBFF000906E9 for Intel
-                    if (!string.IsNullOrEmpty(processorId) && processorId.Length >= 16)
-                    {
-                        try
-                        {
-                            // Last 8 hex digits contain Family_Model_Stepping info
-                            string lastEightDigits = processorId.Substring(processorId.Length - 8);
-                            uint cpuidValue = Convert.ToUInt32(lastEightDigits, 16);
-                            
-                            // Extract Family, Model, Stepping from CPUID value
-                            // CPUID format: bits 0-3: Stepping, 4-7: Model, 8-11: Family, 12-13: Type, 16-19: Extended Model, 20-27: Extended Family
-                            int stepping = (int)(cpuidValue & 0xF);
-                            int model = (int)((cpuidValue >> 4) & 0xF);
-                            int family = (int)((cpuidValue >> 8) & 0xF);
-                            int extendedModel = (int)((cpuidValue >> 16) & 0xF);
-                            int extendedFamily = (int)((cpuidValue >> 20) & 0xFF);
-                            
-                            // Calculate effective Family and Model
-                            int effectiveFamily = family;
-                            if (family == 0xF)
-                                effectiveFamily = family + extendedFamily;
-                            
-                            int effectiveModel = model;
-                            if (family == 0x6 || family == 0xF)
-                                effectiveModel = (extendedModel << 4) + model;
-                            
-                            // Format as CPUID: VendorString:Family-Model-Stepping
-                            string cpuid = $"{vendorString}:{effectiveFamily:X2}-{effectiveModel:X2}-{stepping:X2}";
-                            return cpuid;
-                        }
-                        catch
-                        {
-                            // If parsing fails, fall through to hash method
-                        }
-                    }
-                    
-                    // Fallback: Generate stable hash
-                    return GenerateStableHash($"{processorId}|{o["Name"]}");
-                }
-                return GenerateStableHash("unknown-cpu");
+                string cpuName = GetCpu();
+                return GenerateCpuId(cpuName);
             }
-            catch { return GenerateStableHash("unknown-cpu"); }
+            catch { return "unknown-cpu"; }
+        }
+        
+        /// <summary>
+        /// Generates a name-based CPU ID matching the format from hardwareIdGenerator.ts
+        /// Examples: "r5-2600", "i7-14700kf", "c5-245k"
+        /// </summary>
+        private static string GenerateCpuId(string cpuName)
+        {
+            if (string.IsNullOrEmpty(cpuName)) return "unknown-cpu";
+            
+            string normalized = cpuName.ToLower()
+                .Replace("®", "")
+                .Replace("™", "")
+                .Trim();
+            
+            // Intel Core i-series: "Intel Core i7 14700KF" -> "ci7-14700kf"
+            var match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"intel\s+core\s+(i\d+)[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"ci{match.Groups[1].Value}-{match.Groups[2].Value}".ToLower();
+            }
+            
+            // Intel Core Ultra: "Intel Core Ultra 5 245K" -> "cu245k"
+            match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"intel\s+core\s+ultra\s+(\d+)[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"cu{match.Groups[1].Value}{match.Groups[2].Value}".ToLower();
+            }
+            
+            // Intel Core (new naming): "Intel Core 5 245K" -> "c5-245k"
+            match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"intel\s+core\s+(\d+)[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"c{match.Groups[1].Value}-{match.Groups[2].Value}".ToLower();
+            }
+            
+            // AMD Ryzen: "AMD Ryzen 5 2600" -> "r5-2600"
+            match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"amd\s+ryzen\s+(\d+)[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"r{match.Groups[1].Value}-{match.Groups[2].Value}".ToLower();
+            }
+            
+            // AMD Threadripper: "AMD Ryzen Threadripper 3970X" -> "tr-3970x"
+            match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"threadripper[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"tr-{match.Groups[1].Value}".ToLower();
+            }
+            
+            // AMD EPYC: "AMD EPYC 7742" -> "epyc-7742"
+            match = System.Text.RegularExpressions.Regex.Match(normalized, 
+                @"epyc[\s\-]+([\w\d]+)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"epyc-{match.Groups[1].Value}".ToLower();
+            }
+            
+            // Fallback: sanitize and create ID from full name
+            string sanitized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-z0-9\-]", "-");
+            sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, @"\-+", "-");
+            sanitized = sanitized.Trim('-');
+            if (sanitized.Length > 50) sanitized = sanitized.Substring(0, 50);
+            return sanitized;
         }
 
         private static string GenerateStableHash(string input)
