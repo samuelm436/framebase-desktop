@@ -477,7 +477,7 @@ namespace FramebaseApp
             
             // Intel Core i-series: "Intel Core i7 14700KF" -> "ci7-14700kf"
             var match = System.Text.RegularExpressions.Regex.Match(normalized, 
-                @"intel\s+core\s+(i\d+)[\s\-]+([\w\d]+)", 
+                @"intel\s+core\s+i(\d+)[\s\-]+([\w\d]+)", 
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (match.Success)
             {
